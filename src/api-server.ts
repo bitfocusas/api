@@ -191,20 +191,30 @@ export class APIServer<TAuthContext = undefined> {
       loadEnv: config.loadEnv ?? true,
     };
 
+    // Configure pretty logging for development if pino-pretty is available
+    let loggerTransport: any = undefined;
+    if (this.config.env === 'development') {
+      try {
+        // Check if pino-pretty is available (it's a devDependency)
+        require.resolve('pino-pretty');
+        loggerTransport = {
+          target: 'pino-pretty',
+          options: {
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        };
+      } catch {
+        // pino-pretty not available, use default JSON logging
+        // This is fine in production or if pino-pretty isn't installed
+      }
+    }
+
     // Initialize Fastify
     this.fastify = fastify({
       logger: {
         level: this.config.logLevel,
-        transport:
-          this.config.env === 'development'
-            ? {
-                target: 'pino-pretty',
-                options: {
-                  translateTime: 'HH:MM:ss Z',
-                  ignore: 'pid,hostname',
-                },
-              }
-            : undefined,
+        transport: loggerTransport,
       },
       ajv: {
         customOptions: {

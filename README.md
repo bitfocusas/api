@@ -71,6 +71,27 @@ app.createEndpoint({
 
 This catches type mismatches at compile time and provides better IDE support.
 
+### Production Deployment
+
+For production environments, always set `NODE_ENV=production` or explicitly configure the `env` option:
+
+```typescript
+// Option 1: Environment variable (recommended)
+// NODE_ENV=production node index.js
+
+// Option 2: Explicit config
+const app = new APIServer({
+  env: 'production',
+  logLevel: 'warn',  // Reduce log verbosity in production
+  apiToken: process.env.API_TOKEN,  // Use environment variable for secrets
+});
+```
+
+In production mode, the library:
+- Uses JSON-formatted logs (better for log aggregation)
+- Disables pretty-printing for better performance
+- Defaults to more conservative settings
+
 ## 📚 Examples
 
 Check out the [`examples/`](./examples) directory for complete working examples:
@@ -98,6 +119,8 @@ Create a server instance.
 const app = new APIServer({
   port: 3000,                    // Server port (default: 3000)
   host: '127.0.0.1',            // Host (default: 127.0.0.1)
+  env: 'production',            // Environment: 'development' | 'production' (default: development)
+  logLevel: 'info',             // Log level: 'debug' | 'info' | 'warn' | 'error' (default: info)
   apiTitle: 'My API',           // Swagger title
   apiToken: 'secret-token',      // Bearer token for auth (string or function)
   rateLimitMax: 100,            // Max requests per window (default: 100)
@@ -110,6 +133,7 @@ const app = new APIServer({
 **Config via environment variables:**
 
 ```bash
+NODE_ENV=production          # Set to 'production' in production (default: development)
 PORT=3000
 HOST=127.0.0.1
 API_TOKEN=your-token

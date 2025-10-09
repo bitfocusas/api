@@ -631,30 +631,6 @@ app.setupGracefulShutdown();
 await app.start();
 ```
 
-## Built-in Features
-
-- **Swagger UI** - Interactive API docs at `/docs`
-- **Prometheus Metrics** - Monitoring data at `/metrics`
-- **Rate Limiting** - 100 requests per 15 minutes by default
-- **CORS** - Cross-origin requests enabled
-- **Request Validation** - Query, body, and params validated with Zod
-- **Response Validation** - Catches bugs where responses don't match schemas
-- **Bearer Token Auth** - Built-in authentication middleware
-- **Structured Logging** - Pino logger with pretty formatting in development
-
-## Publishing to npm
-
-```bash
-# Login
-npm login
-
-# Build and publish
-npm run build
-npm publish --access public
-```
-
-Create `@bitfocusas` organization on npm first: https://www.npmjs.com/org/create
-
 ## Repository
 
 - **GitHub**: https://github.com/bitfocusas/api

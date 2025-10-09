@@ -71,7 +71,9 @@ const app = new APIServer<AuthContext>({
 app.createEndpoint({
   method: 'GET',
   url: '/public',
-  response: z.object({ message: z.string() }),
+  response: z.object({ 
+    message: z.string().describe('Welcome message for public access'),
+  }),
   config: {
     description: 'Public endpoint accessible without authentication',
     tags: ['Public'],
@@ -88,10 +90,10 @@ app.createEndpoint({
   url: '/profile',
   authenticated: true,
   response: z.object({
-    userId: z.string(),
-    username: z.string(),
-    role: z.string(),
-    permissions: z.array(z.string()),
+    userId: z.string().describe('Unique user identifier'),
+    username: z.string().describe('Username of the authenticated user'),
+    role: z.string().describe('User role (admin or user)'),
+    permissions: z.array(z.string()).describe('List of permissions granted to this user'),
   }),
   config: {
     description: 'Get current user profile from auth context',
@@ -116,7 +118,9 @@ app.createEndpoint({
   method: 'DELETE',
   url: '/admin/users/:userId',
   authenticated: true,
-  response: z.object({ message: z.string() }),
+  response: z.object({ 
+    message: z.string().describe('Confirmation message of the deletion'),
+  }),
   config: {
     description: 'Admin-only endpoint for deleting users',
     tags: ['Admin'],
@@ -145,8 +149,12 @@ app.createEndpoint({
   method: 'POST',
   url: '/data',
   authenticated: true,
-  body: z.object({ content: z.string() }),
-  response: z.object({ message: z.string() }),
+  body: z.object({ 
+    content: z.string().describe('The data content to be created'),
+  }),
+  response: z.object({ 
+    message: z.string().describe('Confirmation message with creator info'),
+  }),
   config: {
     description: 'Create data - requires write permission',
     tags: ['Protected'],

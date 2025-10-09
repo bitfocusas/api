@@ -28,8 +28,12 @@ const app = new APIServer({ port: 3000 });
 app.createEndpoint({
   method: 'GET',
   url: '/hello',
-  query: z.object({ name: z.string().optional() }),
-  response: z.object({ message: z.string() }),
+  query: z.object({ 
+    name: z.string().optional().describe('Name to greet'),
+  }),
+  response: z.object({ 
+    message: z.string().describe('Greeting message'),
+  }),
   handler: async (request) => {
     return { message: `Hello, ${request.query.name || 'World'}!` };
   },
@@ -70,6 +74,41 @@ app.createEndpoint({
 ```
 
 This catches type mismatches at compile time and provides better IDE support.
+
+### Rich OpenAPI Documentation with `.describe()`
+
+Use Zod's `.describe()` method to add field descriptions to your schemas. These descriptions automatically appear in your Swagger UI, making your API self-documenting:
+
+```typescript
+const UserSchema = z.object({
+  id: z.string().describe('Unique user identifier (UUID)'),
+  email: z.string().email().describe('User email address (must be unique)'),
+  role: z.enum(['admin', 'user']).describe('User role for access control'),
+  createdAt: z.string().describe('ISO 8601 timestamp of account creation'),
+  metadata: z.record(z.any()).optional().describe('Additional user metadata (key-value pairs)'),
+});
+
+app.createEndpoint({
+  method: 'POST',
+  url: '/users',
+  body: UserSchema.omit({ id: true, createdAt: true }),
+  response: UserSchema,
+  config: {
+    description: 'Create a new user account',
+    tags: ['Users'],
+  },
+  handler: async (request) => {
+    // Your logic here
+    return newUser satisfies z.infer<typeof UserSchema>;
+  },
+});
+```
+
+**Benefits:**
+- Field descriptions show up in Swagger UI
+- Better API documentation without writing separate docs
+- Helps frontend developers understand your API
+- Types and documentation stay in sync
 
 ### Production Deployment
 
@@ -415,17 +454,19 @@ app.createEndpoint({
   method: 'GET',
   url: '/users',
   query: z.object({
-    limit: z.coerce.number().int().positive().max(100).default(10),
-    offset: z.coerce.number().int().nonnegative().default(0),
+    limit: z.coerce.number().int().positive().max(100).default(10)
+      .describe('Maximum number of users to return (1-100)'),
+    offset: z.coerce.number().int().nonnegative().default(0)
+      .describe('Number of users to skip for pagination'),
   }),
   response: z.object({
     users: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      email: z.string(),
-      createdAt: z.string(),
-    })),
-    total: z.number(),
+      id: z.string().describe('Unique user identifier'),
+      name: z.string().describe('User full name'),
+      email: z.string().describe('User email address'),
+      createdAt: z.string().describe('ISO 8601 creation timestamp'),
+    })).describe('List of users'),
+    total: z.number().describe('Total number of users in database'),
   }),
   config: {
     description: 'List users with pagination',
@@ -471,16 +512,15 @@ app.createEndpoint({
 app.createEndpoint({
   method: 'POST',
   url: '/users',
-  query: z.object({}),
   body: z.object({
-    name: z.string().min(1).max(100),
-    email: z.string().email(),
+    name: z.string().min(1).max(100).describe('Full name of the user'),
+    email: z.string().email().describe('Email address (must be unique)'),
   }),
   response: z.object({
-    id: z.string(),
-    name: z.string(),
-    email: z.string(),
-    createdAt: z.string(),
+    id: z.string().describe('Unique user identifier'),
+    name: z.string().describe('User full name'),
+    email: z.string().describe('User email address'),
+    createdAt: z.string().describe('ISO 8601 creation timestamp'),
   }),
   config: {
     description: 'Create a new user',

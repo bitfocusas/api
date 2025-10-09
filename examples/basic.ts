@@ -31,19 +31,28 @@ const app = new APIServer({
   ],
 });
 
-// Define schemas
+// Define schemas with .describe() for better OpenAPI documentation
 const CreateUserBody = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-  email: z.string().email('Invalid email address'),
-  age: z.number().int().positive('Age must be a positive number').optional(),
+  name: z.string()
+    .min(1, 'Name is required')
+    .max(100, 'Name must be less than 100 characters')
+    .describe('Full name of the user'),
+  email: z.string()
+    .email('Invalid email address')
+    .describe('Email address (must be unique)'),
+  age: z.number()
+    .int()
+    .positive('Age must be a positive number')
+    .optional()
+    .describe('Age in years (optional)'),
 });
 
 const UserResponse = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
-  age: z.number().optional(),
-  createdAt: z.string(),
+  id: z.string().describe('Unique user identifier (UUID)'),
+  name: z.string().describe('Full name of the user'),
+  email: z.string().describe('Email address'),
+  age: z.number().optional().describe('Age in years'),
+  createdAt: z.string().describe('ISO 8601 timestamp of when the user was created'),
 });
 
 // Create user endpoint

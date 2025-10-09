@@ -14,8 +14,12 @@ const app = new APIServer();
 app.createEndpoint({
   method: 'GET',
   url: '/hello',
-  query: z.object({ name: z.string().optional() }),
-  response: z.object({ message: z.string() }),
+  query: z.object({ 
+    name: z.string().optional().describe('Name to greet (optional, defaults to "World")'),
+  }),
+  response: z.object({ 
+    message: z.string().describe('Personalized greeting message'),
+  }),
   handler: async (request) => {
     return { message: `Hello, ${request.query.name || 'World'}!` };
   },

@@ -81,113 +81,92 @@ app.createEndpoint({
   },
 });
 
-// Protected endpoints with authentication
-app.instance.register(async (protectedScope) => {
-  // Add authentication middleware to all routes in this scope
-  protectedScope.addHook('onRequest', app.authenticateToken);
-  
-  // Profile endpoint - uses auth context
-  app.createEndpoint({
-    method: 'GET',
-    url: '/profile',
-    response: z.object({
-      userId: z.string(),
-      username: z.string(),
-      role: z.string(),
-      permissions: z.array(z.string()),
-    }),
-    config: {
-      description: 'Get current user profile from auth context',
-      tags: ['Protected'],
-    },
-    handler: async (request, reply) => {
-      // request.auth is fully typed as AuthContext
-      if (!request.auth) {
-        return reply.code(401).send({
-          statusCode: 401,
-          error: 'Unauthorized',
-          message: 'Authentication required',
-        });
-      }
-      
-      const { userId, username, role, permissions } = request.auth;
-      
-      return {
-        userId,
-        username,
-        role,
-        permissions,
-      };
-    },
-  });
-  
-  // Admin-only endpoint
-  app.createEndpoint({
-    method: 'DELETE',
-    url: '/admin/users/:userId',
-    response: z.object({ message: z.string() }),
-    config: {
-      description: 'Admin-only endpoint for deleting users',
-      tags: ['Admin'],
-    },
-    handler: async (request, reply) => {
-      if (!request.auth) {
-        return reply.code(401).send({
-          statusCode: 401,
-          error: 'Unauthorized',
-          message: 'Authentication required',
-        });
-      }
-      
-      // Check if user has admin role
-      if (request.auth.role !== 'admin') {
-        return reply.code(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: 'Admin access required',
-        });
-      }
-      
-      const userId = (request.params as { userId: string }).userId;
-      return {
-        message: `User ${userId} deleted by ${request.auth.username}`,
-      };
-    },
-  });
-  
-  // Check permissions example
-  app.createEndpoint({
-    method: 'POST',
-    url: '/data',
-    body: z.object({ content: z.string() }),
-    response: z.object({ message: z.string() }),
-    config: {
-      description: 'Create data - requires write permission',
-      tags: ['Protected'],
-    },
-    handler: async (request, reply) => {
-      if (!request.auth) {
-        return reply.code(401).send({
-          statusCode: 401,
-          error: 'Unauthorized',
-          message: 'Authentication required',
-        });
-      }
-      
-      // Check if user has write permission
-      if (!request.auth.permissions.includes('write')) {
-        return reply.code(403).send({
-          statusCode: 403,
-          error: 'Forbidden',
-          message: 'Write permission required',
-        });
-      }
-      
-      return {
-        message: `Data created by ${request.auth.username}: ${request.body.content}`,
-      };
-    },
-  });
+// Protected endpoint with automatic authentication
+// Using authenticated: true adds Bearer auth requirement and 401/403 responses
+app.createEndpoint({
+  method: 'GET',
+  url: '/profile',
+  authenticated: true,
+  response: z.object({
+    userId: z.string(),
+    username: z.string(),
+    role: z.string(),
+    permissions: z.array(z.string()),
+  }),
+  config: {
+    description: 'Get current user profile from auth context',
+    tags: ['Protected'],
+  },
+  handler: async (request) => {
+    // request.auth is fully typed as AuthContext and guaranteed to exist
+    // when authenticated: true is set
+    const { userId, username, role, permissions } = request.auth as AuthContext;
+    
+    return {
+      userId,
+      username,
+      role,
+      permissions,
+    };
+  },
+});
+
+// Admin-only endpoint with role checking
+app.createEndpoint({
+  method: 'DELETE',
+  url: '/admin/users/:userId',
+  authenticated: true,
+  response: z.object({ message: z.string() }),
+  config: {
+    description: 'Admin-only endpoint for deleting users',
+    tags: ['Admin'],
+  },
+  handler: async (request, reply) => {
+    const auth = request.auth as AuthContext;
+    
+    // Check if user has admin role
+    if (auth.role !== 'admin') {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Admin access required',
+      });
+    }
+    
+    const userId = (request.params as { userId: string }).userId;
+    return {
+      message: `User ${userId} deleted by ${auth.username}`,
+    };
+  },
+});
+
+// Permission-based endpoint
+app.createEndpoint({
+  method: 'POST',
+  url: '/data',
+  authenticated: true,
+  body: z.object({ content: z.string() }),
+  response: z.object({ message: z.string() }),
+  config: {
+    description: 'Create data - requires write permission',
+    tags: ['Protected'],
+  },
+  handler: async (request, reply) => {
+    const auth = request.auth as AuthContext;
+    
+    // Check if user has write permission
+    if (!auth.permissions.includes('write')) {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Write permission required',
+      });
+    }
+    
+    return {
+      message: `Data created by ${auth.username}: ${request.body.content}`,
+    };
+  },
 });
 
 // Setup graceful shutdown

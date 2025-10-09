@@ -154,6 +154,7 @@ app.createEndpoint({
   query: QuerySchema,           // Zod schema for query params
   body: BodySchema,            // Zod schema for request body
   response: ResponseSchema,     // Zod schema for response
+  authenticated: true,          // Optional: Require Bearer token (adds 401/403 responses)
   config: {                     // Optional Swagger metadata
     description: 'Create user',
     tags: ['Users'],
@@ -162,6 +163,7 @@ app.createEndpoint({
   handler: async (request, reply) => {
     // Fully typed request.query and request.body
     // Return value is validated against ResponseSchema
+    // If authenticated: true, request.auth is available
     return { /* response data */ };
   },
 });
@@ -192,9 +194,55 @@ app.setupGracefulShutdown();
 await app.start();
 ```
 
+## Authentication
+
+The library provides flexible authentication with automatic OpenAPI documentation.
+
+### Endpoint-Level Authentication (Recommended)
+
+Add `authenticated: true` to any endpoint to require Bearer token authentication. This automatically:
+- Adds Bearer auth button in Swagger UI
+- Includes 401/403 error responses in OpenAPI spec
+- Applies authentication middleware
+- Validates tokens before your handler runs
+
+```typescript
+const app = new APIServer({
+  apiToken: 'your-secret-token',
+});
+
+// Public endpoint - no authentication
+app.createEndpoint({
+  method: 'GET',
+  url: '/public',
+  response: z.object({ message: z.string() }),
+  handler: async () => {
+    return { message: 'Anyone can access this!' };
+  },
+});
+
+// Protected endpoint - requires authentication
+app.createEndpoint({
+  method: 'GET',
+  url: '/protected',
+  authenticated: true,  // 🔒 Requires Bearer token
+  response: z.object({ secret: z.string() }),
+  handler: async () => {
+    return { secret: 'Only authenticated users see this!' };
+  },
+});
+
+// Usage:
+// curl http://localhost:3000/public  (works)
+// curl -H "Authorization: Bearer your-secret-token" http://localhost:3000/protected  (works)
+// curl http://localhost:3000/protected  (401 Unauthorized)
+```
+
 ### `app.authenticateToken`
 
 Bearer token authentication middleware. Supports both simple string token validation and custom validation with typed context.
+
+**Note:** Using `authenticated: true` on endpoints is preferred over manually registering authentication middleware, as it provides better OpenAPI documentation.
 
 #### Simple Token Authentication
 
@@ -253,23 +301,53 @@ const app = new APIServer<AuthContext>({
   },
 });
 
-// Protected endpoint with access to auth context
-app.instance.register(async (scope) => {
-  scope.addHook('onRequest', app.authenticateToken);
-  
-  app.createEndpoint({
-    method: 'GET',
-    url: '/profile',
-    response: z.object({ userId: z.string(), role: z.string() }),
-    handler: async (request) => {
-      // request.auth is fully typed as AuthContext
-      const { userId, role } = request.auth!;
-      return { userId, role };
-    },
-  });
+// Protected endpoint with access to auth context (using authenticated: true)
+app.createEndpoint({
+  method: 'GET',
+  url: '/profile',
+  authenticated: true,  // 🔒 Requires Bearer token
+  response: z.object({ userId: z.string(), role: z.string() }),
+  handler: async (request) => {
+    // request.auth is fully typed as AuthContext
+    const { userId, role } = request.auth!;
+    return { userId, role };
+  },
+});
+
+// Admin-only endpoint with role checking
+app.createEndpoint({
+  method: 'DELETE',
+  url: '/admin/users/:id',
+  authenticated: true,  // 🔒 Requires Bearer token
+  response: z.object({ message: z.string() }),
+  handler: async (request, reply) => {
+    // Custom role check
+    if (request.auth!.role !== 'admin') {
+      return reply.code(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'Admin access required',
+      });
+    }
+    
+    const { id } = request.params as { id: string };
+    return { message: `User ${id} deleted` };
+  },
 });
 
 // Usage: curl -H "Authorization: Bearer user-jwt-token" http://localhost:3000/profile
+```
+
+**Alternative:** Use `app.instance.register()` with `scope.addHook()` if you need to protect multiple routes at once:
+
+```typescript
+app.instance.register(async (scope) => {
+  scope.addHook('onRequest', app.authenticateToken);
+  
+  // All routes here will require authentication
+  scope.get('/admin/stats', async () => ({ total: 100 }));
+  scope.post('/admin/settings', async () => ({ success: true }));
+});
 ```
 
 ### `app.instance`

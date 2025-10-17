@@ -358,6 +358,9 @@ app.createEndpoint({
   method: 'DELETE',
   url: '/admin/users/:id',
   authenticated: true,  // 🔒 Requires Bearer token
+  params: z.object({
+    id: z.string(),
+  }),
   response: z.object({ message: z.string() }),
   handler: async (request, reply) => {
     // Custom role check
@@ -369,7 +372,7 @@ app.createEndpoint({
       });
     }
     
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
     return { message: `User ${id} deleted` };
   },
 });
@@ -485,7 +488,9 @@ app.createEndpoint({
 app.createEndpoint({
   method: 'GET',
   url: '/users/:id',
-  query: z.object({}),
+  params: z.object({
+    id: z.string(),
+  }),
   response: z.object({
     id: z.string(),
     name: z.string(),
@@ -497,7 +502,7 @@ app.createEndpoint({
     tags: ['Users'],
   },
   handler: async (request) => {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
     const user = users.find(u => u.id === id);
     
     if (!user) {
@@ -552,7 +557,9 @@ app.createEndpoint({
 app.createEndpoint({
   method: 'PUT',
   url: '/users/:id',
-  query: z.object({}),
+  params: z.object({
+    id: z.string(),
+  }),
   body: z.object({
     name: z.string().min(1).max(100).optional(),
     email: z.string().email().optional(),
@@ -568,7 +575,7 @@ app.createEndpoint({
     tags: ['Users'],
   },
   handler: async (request) => {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
     const updates = request.body;
     
     const userIndex = users.findIndex(u => u.id === id);
@@ -592,7 +599,9 @@ app.createEndpoint({
 app.createEndpoint({
   method: 'DELETE',
   url: '/users/:id',
-  query: z.object({}),
+  params: z.object({
+    id: z.string(),
+  }),
   response: z.object({
     message: z.string(),
   }),
@@ -601,7 +610,7 @@ app.createEndpoint({
     tags: ['Users'],
   },
   handler: async (request) => {
-    const { id } = request.params as { id: string };
+    const { id } = request.params;
     const index = users.findIndex(u => u.id === id);
     
     if (index === -1) {

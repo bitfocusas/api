@@ -118,6 +118,9 @@ app.createEndpoint({
   method: 'DELETE',
   url: '/admin/users/:userId',
   authenticated: true,
+  params: z.object({
+    userId: z.string(),
+  }),
   response: z.object({ 
     message: z.string().describe('Confirmation message of the deletion'),
   }),
@@ -137,7 +140,7 @@ app.createEndpoint({
       });
     }
     
-    const userId = (request.params as { userId: string }).userId;
+    const { userId } = request.params;
     return {
       message: `User ${userId} deleted by ${auth.username}`,
     };

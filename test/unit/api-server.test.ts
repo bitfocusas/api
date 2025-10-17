@@ -298,9 +298,12 @@ describe('APIServer', () => {
       server.createEndpoint({
         method: 'GET',
         url: '/users/:id',
+        params: z.object({
+          id: z.string(),
+        }),
         response: z.object({ id: z.string(), name: z.string() }),
         handler: async (request) => {
-          const id = (request.params as { id: string }).id;
+          const { id } = request.params;
           if (id === '999') {
             throw new NotFoundError('User not found');
           }

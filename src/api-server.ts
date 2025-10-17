@@ -102,6 +102,7 @@ export interface APIServerConfig<TAuthContext = unknown> {
 export interface EndpointConfig<
   TQuery extends z.ZodTypeAny = z.ZodUndefined,
   TBody extends z.ZodTypeAny = z.ZodUndefined,
+  TParams extends z.ZodTypeAny = z.ZodUndefined,
   TResponse extends z.ZodTypeAny = z.ZodVoid,
   TAuthContext = undefined,
 > {
@@ -113,6 +114,8 @@ export interface EndpointConfig<
   query?: TQuery;
   /** Zod schema for request body */
   body?: TBody;
+  /** Zod schema for URL path parameters */
+  params?: TParams;
   /** Zod schema for successful response (usually 200) */
   response: TResponse;
   /** Additional route configuration */
@@ -134,6 +137,7 @@ export interface EndpointConfig<
     request: FastifyRequest & {
       query: TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined;
       body: TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined;
+      params: TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined;
       auth?: TAuthContext;
     },
     reply: FastifyReply,
@@ -365,8 +369,9 @@ export class APIServer<TAuthContext = undefined> {
   createEndpoint<
     TQuery extends z.ZodTypeAny = z.ZodUndefined,
     TBody extends z.ZodTypeAny = z.ZodUndefined,
+    TParams extends z.ZodTypeAny = z.ZodUndefined,
     TResponse extends z.ZodTypeAny = z.ZodVoid,
-  >(endpointConfig: EndpointConfig<TQuery, TBody, TResponse, TAuthContext>): void {
+  >(endpointConfig: EndpointConfig<TQuery, TBody, TParams, TResponse, TAuthContext>): void {
     // Validate request data (query and body) before handler execution
     const validatedHandler = async (request: FastifyRequest, reply: FastifyReply) => {
       try {
@@ -404,15 +409,34 @@ export class APIServer<TAuthContext = undefined> {
           validatedBody = bodyResult.data;
         }
 
+        // Validate path parameters
+        let validatedParams: TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined =
+          undefined as TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined;
+        if (endpointConfig.params) {
+          const strictParams = applyStrict(endpointConfig.params);
+          const paramsResult = strictParams.safeParse(request.params);
+          if (!paramsResult.success) {
+            throw new ValidationError(
+              paramsResult.error.errors.map((err: z.ZodIssue) => ({
+                field: `params.${err.path.join('.')}`,
+                message: err.message,
+              })),
+            );
+          }
+          validatedParams = paramsResult.data;
+        }
+
         // Create typed request object
         const typedRequest = {
           ...request,
           query: validatedQuery,
           body: validatedBody,
+          params: validatedParams,
           auth: (request as FastifyRequest & { auth?: TAuthContext }).auth,
         } as FastifyRequest & {
           query: TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined;
           body: TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined;
+          params: TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined;
           auth?: TAuthContext;
         };
 
@@ -518,6 +542,7 @@ export class APIServer<TAuthContext = undefined> {
           summary: endpointConfig.config?.summary,
           operationId,
           querystring: endpointConfig.query ? applyStrict(endpointConfig.query) : undefined,
+          params: endpointConfig.params ? applyStrict(endpointConfig.params) : undefined,
           // Only add body schema for methods that support it
           ...(endpointConfig.method !== 'GET' && endpointConfig.body
             ? { body: applyStrict(endpointConfig.body) }

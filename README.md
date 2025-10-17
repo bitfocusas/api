@@ -15,7 +15,7 @@ Built on [Fastify](https://www.fastify.io/) (fast) and [Zod](https://zod.dev/) (
 ## Installation
 
 ```bash
-npm install @bitfocusas/api zod
+npm install @bitfocusas/api
 ```
 
 ## Quick Start

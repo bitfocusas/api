@@ -1,6 +1,6 @@
 {
   "name": "@bitfocusas/api",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Fastify API server with Zod validation - a type-safe, production-ready API library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

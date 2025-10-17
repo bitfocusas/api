@@ -119,7 +119,7 @@ app.createEndpoint({
   url: '/admin/users/:userId',
   authenticated: true,
   params: z.object({
-    userId: z.string(),
+    userId: z.string().describe('The ID of the user to delete'),
   }),
   response: z.object({ 
     message: z.string().describe('Confirmation message of the deletion'),

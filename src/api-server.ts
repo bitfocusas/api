@@ -72,6 +72,8 @@ export interface APIServerConfig<TAuthContext = unknown> {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** CORS origin (default: *) */
   corsOrigin?: string;
+  /** Trusted proxies */
+  trustProxy?: string | string[] | boolean;
   /** 
    * Bearer token for authentication or custom validator function
    * - String: Simple token comparison (default: development-token-change-in-production)
@@ -235,6 +237,7 @@ export class APIServer<TAuthContext = undefined> {
           keywords: ['kind', 'modifier'],
         },
       },
+      trustProxy: this.config.trustProxy,
     });
 
     // Set up Zod validation

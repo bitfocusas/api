@@ -82,6 +82,8 @@ export interface APIServerConfig<TAuthContext = unknown> {
   rateLimitMax?: number;
   /** Rate limit time window (default: 15m) */
   rateLimitWindow?: string;
+  /** Rate limit allow ip addresses */
+  rateLimitAllow?: string[];
   /** Enable Prometheus metrics endpoint at /metrics (default: true) */
   metricsEnabled?: boolean;
   /** API title for Swagger docs (default: API Documentation) */
@@ -193,6 +195,7 @@ export class APIServer<TAuthContext = undefined> {
       apiToken: config.apiToken ?? process.env.API_TOKEN ?? 'development-token-change-in-production',
       rateLimitMax: config.rateLimitMax ?? parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
       rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
+      rateLimitAllow: config.rateLimitAllow ?? [],
       metricsEnabled: config.metricsEnabled ?? (process.env.METRICS_ENABLED !== 'false'),
       apiTitle: config.apiTitle ?? 'API Documentation',
       apiDescription: config.apiDescription ?? 'API built with Fastify, Zod, and TypeScript',
@@ -257,7 +260,7 @@ export class APIServer<TAuthContext = undefined> {
       max: this.config.rateLimitMax,
       timeWindow: this.config.rateLimitWindow,
       cache: 10000,
-      allowList: ['127.0.0.1'],
+      allowList: ['127.0.0.1', ...this.config.rateLimitAllow],
       redis: undefined,
       skipOnError: true,
       nameSpace: 'faz:',

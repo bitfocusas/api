@@ -1,4 +1,9 @@
 
+## [Unreleased]
+
+### Features
+
+* Add support for optional Fastify instance - you can now bring your own Fastify instance and attach the API server to it, or continue using the default behavior where the library creates its own instance
 
 ## [1.1.3](https://github.com/bitfocusas/api/compare/v1.1.2...v1.1.3) (2025-10-17)
 

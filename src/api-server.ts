@@ -79,6 +79,8 @@ export interface APIServerConfig<TAuthContext = unknown> {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** CORS origin (default: *) */
   corsOrigin?: string;
+  /** Trusted proxies */
+  trustProxy?: string | string[] | boolean;
   /** 
    * Bearer token for authentication or custom validator function
    * - String: Simple token comparison (default: development-token-change-in-production)
@@ -89,6 +91,8 @@ export interface APIServerConfig<TAuthContext = unknown> {
   rateLimitMax?: number;
   /** Rate limit time window (default: 15m) */
   rateLimitWindow?: string;
+  /** Rate limit allow ip addresses */
+  rateLimitAllow?: string[];
   /** Enable Prometheus metrics endpoint at /metrics (default: true) */
   metricsEnabled?: boolean;
   /** API title for Swagger docs (default: API Documentation) */
@@ -179,9 +183,10 @@ export interface EndpointConfig<
  */
 export class APIServer<TAuthContext = undefined> {
   private fastify: FastifyInstance;
-  private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken' | 'fastify'>> & { 
+  private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken' | 'fastify' | 'trustProxy'>> & { 
     apiToken: string | ApiTokenValidator<TAuthContext>;
     fastify?: FastifyInstance;
+    trustProxy?: string | string[] | boolean;
   };
   private started: boolean = false;
   private ownsFastifyInstance: boolean = false;
@@ -240,6 +245,7 @@ export class APIServer<TAuthContext = undefined> {
             keywords: ['kind', 'modifier'],
           },
         },
+        trustProxy: config.trustProxy,
       });
 
       // Set up Zod validation
@@ -255,9 +261,11 @@ export class APIServer<TAuthContext = undefined> {
       env: (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production',
       logLevel: (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
       corsOrigin: config.corsOrigin ?? process.env.CORS_ORIGIN ?? '*',
+      trustProxy: config.trustProxy,
       apiToken: config.apiToken ?? process.env.API_TOKEN ?? 'development-token-change-in-production',
       rateLimitMax: config.rateLimitMax ?? parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
       rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
+      rateLimitAllow: config.rateLimitAllow ?? [],
       metricsEnabled: config.metricsEnabled ?? (process.env.METRICS_ENABLED !== 'false'),
       apiTitle: config.apiTitle ?? 'API Documentation',
       apiDescription: config.apiDescription ?? 'API built with Fastify, Zod, and TypeScript',
@@ -285,7 +293,7 @@ export class APIServer<TAuthContext = undefined> {
       max: this.config.rateLimitMax,
       timeWindow: this.config.rateLimitWindow,
       cache: 10000,
-      allowList: ['127.0.0.1'],
+      allowList: ['127.0.0.1', ...this.config.rateLimitAllow],
       redis: undefined,
       skipOnError: true,
       nameSpace: 'faz:',
@@ -373,7 +381,7 @@ export class APIServer<TAuthContext = undefined> {
   /**
    * Get the server configuration
    */
-  get serverConfig(): Readonly<Required<Omit<APIServerConfig<TAuthContext>, 'fastify'>> & { fastify?: FastifyInstance }> {
+  get serverConfig(): Readonly<Required<Omit<APIServerConfig<TAuthContext>, 'fastify' | 'trustProxy'>> & { fastify?: FastifyInstance; trustProxy?: string | string[] | boolean }> {
     return this.config;
   }
 

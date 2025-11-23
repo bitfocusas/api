@@ -58,13 +58,20 @@ export type ApiTokenValidator<TContext = unknown> = (
  * Configuration options for the API server
  */
 export interface APIServerConfig<TAuthContext = unknown> {
-	/** Server port (default: 3000) */
+	/**
+	 * Optional Fastify instance to use instead of creating a new one.
+	 * If provided, the library will attach to your existing Fastify instance
+	 * and you'll be responsible for starting/stopping it.
+	 * If not provided, the library will create and manage its own instance.
+	 */
+	fastify?: FastifyInstance
+	/** Server port (default: 3000) - Only used if fastify is not provided */
 	port?: number
-	/** Server host (default: 127.0.0.1) */
+	/** Server host (default: 127.0.0.1) - Only used if fastify is not provided */
 	host?: string
 	/** Environment (default: development) */
 	env?: 'development' | 'production'
-	/** Log level (default: info) */
+	/** Log level (default: info) - Only used if fastify is not provided */
 	logLevel?: 'debug' | 'info' | 'warn' | 'error'
 	/** CORS origin (default: *) */
 	corsOrigin?: string
@@ -172,10 +179,13 @@ export interface EndpointConfig<
  */
 export class APIServer<TAuthContext = undefined> {
 	private fastify: FastifyInstance
-	private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken'>> & {
+	private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken' | 'fastify' | 'trustProxy'>> & {
 		apiToken: string | ApiTokenValidator<TAuthContext>
+		fastify?: FastifyInstance
+		trustProxy?: string | string[] | boolean
 	}
 	private started = false
+	private ownsFastifyInstance = false
 
 	constructor(config: APIServerConfig<TAuthContext> = {}) {
 		// Load environment variables if requested
@@ -183,14 +193,71 @@ export class APIServer<TAuthContext = undefined> {
 			dotenvConfig()
 		}
 
+		// Check if user provided their own Fastify instance
+		if (config.fastify) {
+			// Use provided Fastify instance
+			this.fastify = config.fastify
+			this.ownsFastifyInstance = false
+
+			// Set up Zod validation on the provided instance
+			this.fastify.setValidatorCompiler(validatorCompiler)
+			this.fastify.setSerializerCompiler(serializerCompiler)
+		} else {
+			// Create our own Fastify instance
+			this.ownsFastifyInstance = true
+
+			// Merge with defaults, prioritizing config over env vars
+			const logLevel = (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error'
+
+			// Configure pretty logging for development if pino-pretty is available
+			let loggerTransport: { target: string; options: Record<string, unknown> } | undefined = undefined
+			const env = (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production'
+			if (env === 'development') {
+				try {
+					// Check if pino-pretty is available (it's a devDependency)
+					require.resolve('pino-pretty')
+					loggerTransport = {
+						target: 'pino-pretty',
+						options: {
+							translateTime: 'HH:MM:ss Z',
+							ignore: 'pid,hostname',
+						},
+					}
+				} catch {
+					// pino-pretty not available, use default JSON logging
+					// This is fine in production or if pino-pretty isn't installed
+				}
+			}
+
+			// Initialize Fastify
+			this.fastify = fastify({
+				logger: {
+					level: logLevel,
+					transport: loggerTransport,
+				},
+				ajv: {
+					customOptions: {
+						strict: 'log',
+						keywords: ['kind', 'modifier'],
+					},
+				},
+				trustProxy: config.trustProxy,
+			})
+
+			// Set up Zod validation
+			this.fastify.setValidatorCompiler(validatorCompiler)
+			this.fastify.setSerializerCompiler(serializerCompiler)
+		}
+
 		// Merge with defaults, prioritizing config over env vars
 		this.config = {
+			fastify: config.fastify,
 			port: config.port ?? Number.parseInt(process.env.PORT || '3000', 10),
 			host: config.host ?? process.env.HOST ?? '127.0.0.1',
 			env: (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production',
 			logLevel: (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
 			corsOrigin: config.corsOrigin ?? process.env.CORS_ORIGIN ?? '*',
-			trustProxy: config.trustProxy ?? false,
+			trustProxy: config.trustProxy,
 			apiToken: config.apiToken ?? process.env.API_TOKEN ?? 'development-token-change-in-production',
 			rateLimitMax: config.rateLimitMax ?? Number.parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
 			rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
@@ -202,44 +269,6 @@ export class APIServer<TAuthContext = undefined> {
 			apiTags: config.apiTags ?? [],
 			loadEnv: config.loadEnv ?? true,
 		}
-
-		// Configure pretty logging for development if pino-pretty is available
-		let loggerTransport: { target: string; options: Record<string, unknown> } | undefined = undefined
-		if (this.config.env === 'development') {
-			try {
-				// Check if pino-pretty is available (it's a devDependency)
-				require.resolve('pino-pretty')
-				loggerTransport = {
-					target: 'pino-pretty',
-					options: {
-						translateTime: 'HH:MM:ss Z',
-						ignore: 'pid,hostname',
-					},
-				}
-			} catch {
-				// pino-pretty not available, use default JSON logging
-				// This is fine in production or if pino-pretty isn't installed
-			}
-		}
-
-		// Initialize Fastify
-		this.fastify = fastify({
-			logger: {
-				level: this.config.logLevel,
-				transport: loggerTransport,
-			},
-			ajv: {
-				customOptions: {
-					strict: 'log',
-					keywords: ['kind', 'modifier'],
-				},
-			},
-			trustProxy: this.config.trustProxy,
-		})
-
-		// Set up Zod validation
-		this.fastify.setValidatorCompiler(validatorCompiler)
-		this.fastify.setSerializerCompiler(serializerCompiler)
 
 		// Register plugins at root level - these must be registered before any routes
 		this.registerPlugins()
@@ -348,7 +377,12 @@ export class APIServer<TAuthContext = undefined> {
 	/**
 	 * Get the server configuration
 	 */
-	get serverConfig(): Readonly<Required<APIServerConfig>> {
+	get serverConfig(): Readonly<
+		Required<Omit<APIServerConfig<TAuthContext>, 'fastify' | 'trustProxy'>> & {
+			fastify?: FastifyInstance
+			trustProxy?: string | string[] | boolean
+		}
+	> {
 		return this.config
 	}
 
@@ -641,15 +675,32 @@ export class APIServer<TAuthContext = undefined> {
 
 	/**
 	 * Start the API server
-	 * @returns Promise that resolves when server is ready
+	 *
+	 * If you provided your own Fastify instance via the config, this method
+	 * will not start the server (you're responsible for starting it yourself).
+	 * If the library created its own instance, this will start it.
+	 *
+	 * @returns Promise that resolves when server is ready (or immediately if using provided instance)
 	 */
 	async start(): Promise<void> {
 		if (this.started) {
 			throw new Error('Server is already started')
 		}
 
+		// If user provided their own Fastify instance, don't start it
+		if (!this.ownsFastifyInstance) {
+			this.started = true
+			console.log(`
+✅ API server attached to your Fastify instance!
+📝 API Documentation: http://localhost:${this.config.port}/docs
+${this.config.metricsEnabled ? `📊 Metrics: http://localhost:${this.config.port}/metrics` : ''}
+🔒 Rate Limit: ${this.config.rateLimitMax} requests per ${this.config.rateLimitWindow}
+      `)
+			return
+		}
+
 		try {
-			// Start server
+			// Start server (we own the instance)
 			await this.fastify.listen({
 				port: this.config.port,
 				host: this.config.host,
@@ -671,9 +722,19 @@ ${this.config.metricsEnabled ? `📊 Metrics: http://localhost:${this.config.por
 
 	/**
 	 * Stop the API server gracefully
+	 *
+	 * If you provided your own Fastify instance via the config, this method
+	 * will not close it (you're responsible for closing it yourself).
+	 * If the library created its own instance, this will close it.
 	 */
 	async stop(): Promise<void> {
 		if (!this.started) {
+			return
+		}
+
+		// If user provided their own Fastify instance, don't close it
+		if (!this.ownsFastifyInstance) {
+			this.started = false
 			return
 		}
 

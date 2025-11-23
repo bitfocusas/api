@@ -137,12 +137,14 @@ Check out the [`examples/`](./examples) directory for complete working examples:
 
 - **[simple.ts](./examples/simple.ts)** - Minimal setup, perfect for getting started
 - **[basic.ts](./examples/basic.ts)** - User CRUD API with validation and error handling
+- **[custom-fastify.ts](./examples/custom-fastify.ts)** - Use your own Fastify instance
 - **[custom-auth.ts](./examples/custom-auth.ts)** - Custom authentication with typed context
 
 Run any example:
 ```bash
 npm run example:simple
 npm run example:basic
+npm run example:fastify
 npm run example:auth
 ```
 
@@ -152,7 +154,9 @@ See the [examples README](./examples/README.md) for detailed information about e
 
 ### `new APIServer(config?)`
 
-Create a server instance.
+Create a server instance. You can either let the library create its own Fastify instance (default) or provide your own.
+
+#### Option 1: Let the library create its own Fastify instance (default)
 
 ```typescript
 const app = new APIServer({
@@ -167,7 +171,46 @@ const app = new APIServer({
   metricsEnabled: true,         // Enable /metrics endpoint (default: true)
   corsOrigin: '*',              // CORS origin (default: *)
 });
+
+await app.start(); // Library manages server lifecycle
 ```
+
+#### Option 2: Use your own Fastify instance
+
+```typescript
+import fastify from 'fastify';
+
+// Create your own Fastify instance
+const customFastify = fastify({
+  logger: { level: 'info' },
+  // Add your own configuration
+});
+
+// Register your own plugins/routes
+customFastify.get('/health', async () => ({ status: 'ok' }));
+
+// Attach API server to your instance
+const app = new APIServer({
+  fastify: customFastify,       // 🔑 Pass your Fastify instance
+  apiTitle: 'My API',
+  apiToken: 'secret-token',
+  // port/host/logLevel are ignored when fastify is provided
+});
+
+await app.start(); // Attaches endpoints, but doesn't start server
+
+// You're responsible for starting your Fastify instance
+await customFastify.listen({ port: 3000, host: '127.0.0.1' });
+```
+
+**When to use your own Fastify instance:**
+
+- Integrating with an existing Fastify application
+- Sharing a Fastify instance across multiple modules
+- Need custom Fastify configuration or plugins
+- Want more control over server lifecycle
+
+See the [custom-fastify example](./examples/custom-fastify.ts) for a complete example.
 
 **Config via environment variables:**
 
@@ -212,16 +255,36 @@ app.createEndpoint({
 
 Start the server. Returns a Promise.
 
+**Behavior:**
+- If you provided your own Fastify instance: Attaches endpoints but doesn't start the server (you start it yourself)
+- If the library created its own instance: Starts the server automatically
+
 ```typescript
-await app.start();
+// Default: Library manages server
+const app = new APIServer({ port: 3000 });
+await app.start(); // Server is now running
+
+// Custom Fastify: You manage server
+const customFastify = fastify();
+const app = new APIServer({ fastify: customFastify });
+await app.start(); // Endpoints attached, but server not started yet
+await customFastify.listen({ port: 3000 }); // You start it
 ```
 
 ### `app.stop()`
 
 Stop the server gracefully.
 
+**Behavior:**
+- If you provided your own Fastify instance: Doesn't close it (you close it yourself)
+- If the library created its own instance: Closes the server automatically
+
 ```typescript
-await app.stop();
+// Default: Library manages server
+await app.stop(); // Server is closed
+
+// Custom Fastify: You manage server
+await customFastify.close(); // You close it yourself
 ```
 
 ### `app.setupGracefulShutdown()`

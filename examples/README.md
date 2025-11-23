@@ -15,6 +15,9 @@ npm run example:basic
 
 # Custom auth example - JWT/token validation with typed context
 npm run example:auth
+
+# Custom Fastify example - use your own Fastify instance
+npm run example:fastify
 ```
 
 Or run them directly:
@@ -23,6 +26,7 @@ Or run them directly:
 npx tsx examples/simple.ts
 npx tsx examples/basic.ts
 npx tsx examples/custom-auth.ts
+npx tsx examples/custom-fastify.ts
 ```
 
 ## 📚 Available Examples
@@ -70,7 +74,44 @@ curl http://localhost:3000/users
 
 ---
 
-### 3. **custom-auth.ts** - Authentication & Authorization
+### 3. **custom-fastify.ts** - Using Your Own Fastify Instance
+
+Example showing how to attach the API server to your existing Fastify instance.
+
+**Features:**
+
+- Custom Fastify instance with your own configuration
+- Register plugins before attaching API server
+- Add custom routes alongside API endpoints
+- Full control over Fastify lifecycle
+
+**Run:** `npm run example:fastify`
+
+**Use cases:**
+
+- Integrating with existing Fastify applications
+- Sharing a Fastify instance across modules
+- Using custom Fastify plugins
+- More control over server configuration
+
+**Try it:**
+
+```bash
+# Health check (custom route)
+curl http://localhost:3000/health
+
+# List users (API endpoint)
+curl http://localhost:3000/users?limit=2
+
+# Create user (API endpoint)
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com"}'
+```
+
+---
+
+### 4. **custom-auth.ts** - Authentication & Authorization
 
 Advanced example showing custom token validation with typed context.
 
@@ -131,7 +172,8 @@ We recommend exploring the examples in this order:
 
 1. **simple.ts** → Learn the basics
 2. **basic.ts** → Understand validation and error handling
-3. **custom-auth.ts** → Master authentication patterns
+3. **custom-fastify.ts** → Use your own Fastify instance
+4. **custom-auth.ts** → Master authentication patterns
 
 ## 📖 More Information
 

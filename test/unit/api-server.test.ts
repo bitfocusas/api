@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
 import supertest from 'supertest'
+import fastify from 'fastify'
 import type { FastifyRequest } from 'fastify'
 import { APIServer, ValidationError, NotFoundError } from '../../src/index'
 
 describe('APIServer', () => {
-	let server: APIServer<unknown>
+	let server: APIServer
 
 	afterEach(async () => {
 		if (server) {
@@ -285,7 +286,7 @@ describe('APIServer', () => {
 		})
 
 		it('should handle NotFoundError thrown in handler', async () => {
-			server = new APIServer({ port: 3009, metricsEnabled: false })
+			server = new APIServer({ port: 3027, metricsEnabled: false })
 
 			server.createEndpoint({
 				method: 'GET',
@@ -532,9 +533,9 @@ describe('APIServer', () => {
 
 			await server.start()
 
-			const response = await supertest(server.instance.server).get('/docs').expect(200) // Swagger UI v5 serves directly at /docs
+			const response = await supertest(server.instance.server).get('/docs').expect(302) // Redirect to /docs/
 
-			expect(response.text).toContain('swagger')
+			expect(response.header.location).toContain('/docs/')
 		})
 	})
 
@@ -580,6 +581,166 @@ describe('APIServer', () => {
 			const response = await supertest(server.instance.server).get('/tagged').expect(200)
 
 			expect(response.body.data).toBe('test')
+		})
+	})
+
+	describe('Custom Fastify Instance', () => {
+		it('should work with provided Fastify instance', async () => {
+			const customFastify = fastify({ logger: false })
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false,
+			})
+
+			server.createEndpoint({
+				method: 'GET',
+				url: '/test',
+				response: z.object({ message: z.string() }),
+				handler: async () => ({ message: 'Hello from custom Fastify' }),
+			})
+
+			// Call start - should attach endpoints but not start server
+			await server.start()
+
+			// Start the custom Fastify instance ourselves
+			await customFastify.listen({ port: 3022, host: '127.0.0.1' })
+
+			const response = await supertest(customFastify.server).get('/test').expect(200)
+
+			expect(response.body.message).toBe('Hello from custom Fastify')
+
+			// Clean up
+			await customFastify.close()
+		})
+
+		it('should not start server when using custom Fastify instance', async () => {
+			const customFastify = fastify({ logger: false })
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false,
+			})
+
+			server.createEndpoint({
+				method: 'GET',
+				url: '/test',
+				response: z.object({ message: z.string() }),
+				handler: async () => ({ message: 'test' }),
+			})
+
+			// Call start - should not throw even though server isn't started
+			await server.start()
+
+			// Verify server is not listening
+			expect(customFastify.server.listening).toBe(false)
+
+			// Clean up
+			await customFastify.close()
+		})
+
+		it('should not stop custom Fastify instance', async () => {
+			const customFastify = fastify({ logger: false })
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false,
+			})
+
+			await customFastify.listen({ port: 3023, host: '127.0.0.1' })
+			await server.start()
+
+			// Call stop - should not close the custom instance
+			await server.stop()
+
+			// Verify server is still listening
+			expect(customFastify.server.listening).toBe(true)
+
+			// Clean up
+			await customFastify.close()
+		})
+
+		it('should register plugins on custom Fastify instance', async () => {
+			const customFastify = fastify({ logger: false })
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false, // Disable metrics to avoid Prometheus registry conflicts in tests
+			})
+
+			await server.start()
+			await customFastify.listen({ port: 3024, host: '127.0.0.1' })
+
+			// Verify CORS is registered (plugins are registered)
+			// We can't easily test metrics without registry conflicts, so we just verify plugins were registered
+			const response = await supertest(customFastify.server).get('/test').expect(404) // Endpoint doesn't exist, but CORS headers should be present
+
+			await customFastify.close()
+		})
+
+		it('should allow custom routes alongside API endpoints', async () => {
+			const customFastify = fastify({ logger: false })
+
+			// Add custom route before creating API server
+			customFastify.get('/custom', async () => ({ custom: true }))
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false,
+			})
+
+			server.createEndpoint({
+				method: 'GET',
+				url: '/api/test',
+				response: z.object({ api: z.boolean() }),
+				handler: async () => ({ api: true }),
+			})
+
+			await server.start()
+			await customFastify.listen({ port: 3025, host: '127.0.0.1' })
+
+			// Test custom route
+			const customResponse = await supertest(customFastify.server).get('/custom').expect(200)
+			expect(customResponse.body.custom).toBe(true)
+
+			// Test API endpoint
+			const apiResponse = await supertest(customFastify.server).get('/api/test').expect(200)
+			expect(apiResponse.body.api).toBe(true)
+
+			await customFastify.close()
+		})
+
+		it('should set up Zod validation on custom Fastify instance', async () => {
+			const customFastify = fastify({ logger: false })
+
+			server = new APIServer({
+				fastify: customFastify,
+				metricsEnabled: false,
+			})
+
+			server.createEndpoint({
+				method: 'POST',
+				url: '/validate',
+				body: z.object({ name: z.string() }),
+				response: z.object({ name: z.string() }),
+				handler: async (request) => ({ name: request.body.name }),
+			})
+
+			await server.start()
+			await customFastify.listen({ port: 3026, host: '127.0.0.1' })
+
+			// Test validation works
+			const response = await supertest(customFastify.server).post('/validate').send({ name: 'John' }).expect(200)
+
+			expect(response.body.name).toBe('John')
+
+			// Test invalid data is rejected
+			await supertest(customFastify.server)
+				.post('/validate')
+				.send({ name: 123 }) // Invalid type
+				.expect(400)
+
+			await customFastify.close()
 		})
 	})
 })

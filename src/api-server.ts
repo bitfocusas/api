@@ -541,6 +541,8 @@ export class APIServer<TAuthContext = undefined> {
 		this.fastify.after(() => {
 			// Provide empty params schema if no params are defined to avoid Fastify warnings
 			const paramsSchema = endpointConfig.params ? applyStrict(endpointConfig.params) : z.object({}).strict()
+			// Provide empty querystring schema if no query is defined to avoid Fastify warnings
+			const querystringSchema = endpointConfig.query ? applyStrict(endpointConfig.query) : z.object({}).strict()
 
 			this.fastify.route({
 				method: endpointConfig.method,
@@ -551,7 +553,7 @@ export class APIServer<TAuthContext = undefined> {
 					tags: endpointConfig.config?.tags,
 					summary: endpointConfig.config?.summary,
 					operationId,
-					querystring: endpointConfig.query ? applyStrict(endpointConfig.query) : undefined,
+					querystring: querystringSchema,
 					params: paramsSchema,
 					// Only add body schema for methods that support it
 					...(endpointConfig.method !== 'GET' && endpointConfig.body

@@ -533,9 +533,9 @@ describe('APIServer', () => {
 
 			await server.start()
 
-			const response = await supertest(server.instance.server).get('/docs').expect(302) // Redirect to /docs/
+			const response = await supertest(server.instance.server).get('/docs').expect(200) // Swagger UI v5 serves directly at /docs
 
-			expect(response.header.location).toContain('/docs/')
+			expect(response.text).toContain('swagger')
 		})
 	})
 

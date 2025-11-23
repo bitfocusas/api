@@ -1,0 +1,107 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+	"files": {
+		"maxSize": 2048576,
+		"includes": ["**", "!**/node_modules", "!**/dist"]
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "off"
+			}
+		}
+	},
+	"linter": {
+		"rules": {
+			"recommended": true,
+			"a11y": {
+				"useAltText": "off",
+				"useKeyWithClickEvents": "off",
+				"useGenericFontNames": "off",
+				"noStaticElementInteractions": "off",
+				"noLabelWithoutControl": "off"
+			},
+			"complexity": {
+				"noForEach": "off",
+				"noStaticOnlyClass": "off",
+				"noThisInStatic": "off",
+				"useRegexLiterals": "off",
+				"noUselessUndefinedInitialization": "off",
+				"noUselessFragments": "off",
+				"noFlatMapIdentity": "off",
+				"useDateNow": "off",
+				"noUselessEscapeInRegex": "off",
+				"noUselessContinue": "off"
+			},
+			"style": {
+				"noParameterAssign": "off",
+				"useTemplate": "off",
+				"noUselessElse": "off",
+				"useAsConstAssertion": "error",
+				"useDefaultParameterLast": "error",
+				"useEnumInitializers": "error",
+				"useSelfClosingElements": "error",
+				"useSingleVarDeclarator": "error",
+				"noUnusedTemplateLiteral": "error",
+				"useNumberNamespace": "error",
+				"noInferrableTypes": "error",
+				"noDescendingSpecificity": "off"
+			},
+			"suspicious": {
+				"noConfusingVoidType": "off",
+				"useIterableCallbackReturn": "off",
+				"noUnknownAtRules": "off",
+				"noTsIgnore": "off"
+			},
+			"performance": {
+				"noDelete": "off"
+			},
+			"correctness": {
+				"useExhaustiveDependencies": "off",
+				"noUnusedImports": "error",
+				"useJsxKeyInIterable": "warn",
+				"useHookAtTopLevel": "error",
+				"noChildrenProp": "error",
+				"noConstAssign": "error",
+				"noUnusedFunctionParameters": "warn",
+				"noUnsafeFinally": "off",
+				"noUnreachable": "warn",
+				"noUnusedVariables": "off",
+				"noVoidTypeReturn": "off",
+				"noConstantCondition": "off",
+				"useUniqueElementIds": "off",
+				"noNestedComponentDefinitions": "warn",
+				"useParseIntRadix": "off"
+			},
+			"nursery": {
+				"noShadow": "warn"
+			}
+		}
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"indentWidth": 4,
+		"lineWidth": 120,
+		"lineEnding": "lf"
+	},
+	"javascript": {
+		"formatter": {
+			"arrowParentheses": "always",
+			"jsxQuoteStyle": "double",
+			"quoteProperties": "asNeeded",
+			"semicolons": "asNeeded",
+			"quoteStyle": "single",
+			"trailingCommas": "all",
+			"expand": "auto"
+		}
+	},
+	"json": {
+		"linter": {
+			"enabled": true
+		},
+		"formatter": {
+			"enabled": true
+		}
+	}
+}

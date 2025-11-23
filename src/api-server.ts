@@ -175,7 +175,7 @@ export class APIServer<TAuthContext = undefined> {
 	private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken'>> & {
 		apiToken: string | ApiTokenValidator<TAuthContext>
 	}
-	private started: boolean = false
+	private started = false
 
 	constructor(config: APIServerConfig<TAuthContext> = {}) {
 		// Load environment variables if requested
@@ -185,14 +185,14 @@ export class APIServer<TAuthContext = undefined> {
 
 		// Merge with defaults, prioritizing config over env vars
 		this.config = {
-			port: config.port ?? parseInt(process.env.PORT || '3000', 10),
+			port: config.port ?? Number.parseInt(process.env.PORT || '3000', 10),
 			host: config.host ?? process.env.HOST ?? '127.0.0.1',
 			env: (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production',
 			logLevel: (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
 			corsOrigin: config.corsOrigin ?? process.env.CORS_ORIGIN ?? '*',
 			trustProxy: config.trustProxy ?? false,
 			apiToken: config.apiToken ?? process.env.API_TOKEN ?? 'development-token-change-in-production',
-			rateLimitMax: config.rateLimitMax ?? parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+			rateLimitMax: config.rateLimitMax ?? Number.parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
 			rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
 			rateLimitAllow: config.rateLimitAllow ?? [],
 			metricsEnabled: config.metricsEnabled ?? process.env.METRICS_ENABLED !== 'false',

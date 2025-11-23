@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import supertest from 'supertest'
+import type { FastifyRequest, FastifyReply } from 'fastify'
 import { APIServer, z } from '../../src/index'
 
 /**
@@ -20,6 +21,11 @@ describe('Custom Auth Example E2E', () => {
 		username: string
 		role: 'admin' | 'user'
 		permissions: string[]
+	}
+
+	// Type for authenticated Fastify requests
+	type AuthenticatedRequest = FastifyRequest & {
+		auth?: AuthContext
 	}
 
 	// Simulated token database
@@ -52,7 +58,7 @@ describe('Custom Auth Example E2E', () => {
 			apiDescription: 'API with custom token validation and typed context',
 
 			// Custom token validator function
-			apiToken: async (token, request) => {
+			apiToken: async (token, _request) => {
 				// Look up token in database
 				const authContext = tokenDatabase[token]
 
@@ -91,7 +97,7 @@ describe('Custom Auth Example E2E', () => {
 			protectedScope.addHook('onRequest', app.authenticateToken)
 
 			// Profile endpoint - uses auth context
-			protectedScope.get('/profile', async (request, reply) => {
+			protectedScope.get('/profile', async (request: AuthenticatedRequest, reply: FastifyReply) => {
 				if (!request.auth) {
 					return reply.code(401).send({
 						statusCode: 401,
@@ -111,32 +117,35 @@ describe('Custom Auth Example E2E', () => {
 			})
 
 			// Admin-only endpoint
-			protectedScope.delete('/admin/users/:userId', async (request, reply) => {
-				if (!request.auth) {
-					return reply.code(401).send({
-						statusCode: 401,
-						error: 'Unauthorized',
-						message: 'Authentication required',
-					})
-				}
+			protectedScope.delete(
+				'/admin/users/:userId',
+				async (request: AuthenticatedRequest, reply: FastifyReply) => {
+					if (!request.auth) {
+						return reply.code(401).send({
+							statusCode: 401,
+							error: 'Unauthorized',
+							message: 'Authentication required',
+						})
+					}
 
-				// Check if user has admin role
-				if (request.auth.role !== 'admin') {
-					return reply.code(403).send({
-						statusCode: 403,
-						error: 'Forbidden',
-						message: 'Admin access required',
-					})
-				}
+					// Check if user has admin role
+					if (request.auth.role !== 'admin') {
+						return reply.code(403).send({
+							statusCode: 403,
+							error: 'Forbidden',
+							message: 'Admin access required',
+						})
+					}
 
-				const userId = (request.params as { userId: string }).userId
-				return {
-					message: `User ${userId} deleted by ${request.auth.username}`,
-				}
-			})
+					const userId = (request.params as { userId: string }).userId
+					return {
+						message: `User ${userId} deleted by ${request.auth.username}`,
+					}
+				},
+			)
 
 			// Check permissions example
-			protectedScope.post('/data', async (request, reply) => {
+			protectedScope.post('/data', async (request: AuthenticatedRequest, reply: FastifyReply) => {
 				if (!request.auth) {
 					return reply.code(401).send({
 						statusCode: 401,

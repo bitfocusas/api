@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
 import supertest from 'supertest'
+import type { FastifyRequest } from 'fastify'
 import { APIServer, ValidationError, NotFoundError } from '../../src/index'
 
 describe('APIServer', () => {
-	let server: APIServer
+	let server: APIServer<unknown>
 
 	afterEach(async () => {
 		if (server) {
@@ -230,9 +231,10 @@ describe('APIServer', () => {
 				response: z.object({
 					requiredField: z.string(),
 				}),
+				// @ts-ignore - Intentionally returning invalid response to test validation
 				handler: async () => {
-					// Intentionally return invalid data
-					return {} as any
+					// Intentionally return invalid data to test response validation
+					return {}
 				},
 			})
 
@@ -422,7 +424,7 @@ describe('APIServer', () => {
 		}
 
 		it('should support custom token validator with context', async () => {
-			server = new APIServer<TestAuthContext>({
+			const testServer = new APIServer<TestAuthContext>({
 				port: 3014,
 				metricsEnabled: false,
 				apiToken: async (token) => {
@@ -436,10 +438,10 @@ describe('APIServer', () => {
 				},
 			})
 
-			await server.instance.register(async (protectedScope) => {
-				protectedScope.addHook('onRequest', server.authenticateToken)
+			await testServer.instance.register(async (protectedScope) => {
+				protectedScope.addHook('onRequest', testServer.authenticateToken)
 
-				protectedScope.get('/profile', async (request) => {
+				protectedScope.get('/profile', async (request: FastifyRequest & { auth?: TestAuthContext }) => {
 					if (!request.auth) {
 						throw new Error('Auth context not set')
 					}
@@ -450,9 +452,9 @@ describe('APIServer', () => {
 				})
 			})
 
-			await server.start()
+			await testServer.start()
 
-			const response = await supertest(server.instance.server)
+			const response = await supertest(testServer.instance.server)
 				.get('/profile')
 				.set('Authorization', 'Bearer valid-custom-token')
 				.expect(200)
@@ -461,6 +463,8 @@ describe('APIServer', () => {
 				userId: '123',
 				role: 'admin',
 			})
+
+			await testServer.stop()
 		})
 
 		it('should reject invalid token with custom validator', async () => {

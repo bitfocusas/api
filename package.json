@@ -26,7 +26,8 @@
 		"test:coverage": "vitest run --coverage",
 		"test:unit": "vitest run test/unit",
 		"test:e2e": "vitest run test/e2e",
-		"release": "release-it"
+		"release": "release-it",
+		"prepare": "husky"
 	},
 	"keywords": [
 		"fastify",
@@ -60,6 +61,7 @@
 		"@types/node": "^24.10.1",
 		"@types/supertest": "^6.0.3",
 		"@vitest/ui": "^4.0.13",
+		"husky": "^9.1.7",
 		"pino-pretty": "^13.1.2",
 		"release-it": "^19.0.6",
 		"supertest": "^7.1.4",

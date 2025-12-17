@@ -104,6 +104,16 @@ export interface APIServerConfig<TAuthContext = unknown> {
 }
 
 /**
+ * Per-endpoint rate limit configuration
+ */
+export interface EndpointRateLimitConfig {
+	/** Maximum number of requests allowed in the time window */
+	max: number
+	/** Time window for rate limiting (e.g., '1m', '15m', '1h') */
+	timeWindow?: string
+}
+
+/**
  * Configuration for an API endpoint
  */
 export interface EndpointConfig<
@@ -139,6 +149,13 @@ export interface EndpointConfig<
 	 * Also automatically applies authentication middleware
 	 */
 	authenticated?: boolean
+	/**
+	 * Per-endpoint rate limiting configuration
+	 * - `false`: Disable rate limiting for this endpoint
+	 * - `{ max: number, timeWindow?: string }`: Custom rate limit settings
+	 * - `undefined`: Use global rate limit settings (default)
+	 */
+	rateLimit?: false | EndpointRateLimitConfig
 	/** The actual handler function with fully typed parameters */
 	handler: (
 		request: FastifyRequest & {
@@ -578,6 +595,23 @@ export class APIServer<TAuthContext = undefined> {
 			// Provide empty querystring schema if no query is defined to avoid Fastify warnings
 			const querystringSchema = endpointConfig.query ? applyStrict(endpointConfig.query) : z.object({}).strict()
 
+			// Build rate limit config for this route
+			let rateLimitConfig: { rateLimit: false | { max: number; timeWindow?: string } } | undefined
+			if (endpointConfig.rateLimit === false) {
+				// Disable rate limiting for this endpoint
+				rateLimitConfig = { rateLimit: false }
+			} else if (endpointConfig.rateLimit) {
+				// Custom rate limit settings for this endpoint
+				rateLimitConfig = {
+					rateLimit: {
+						max: endpointConfig.rateLimit.max,
+						...(endpointConfig.rateLimit.timeWindow
+							? { timeWindow: endpointConfig.rateLimit.timeWindow }
+							: {}),
+					},
+				}
+			}
+
 			this.fastify.route({
 				method: endpointConfig.method,
 				url: endpointConfig.url,
@@ -597,6 +631,8 @@ export class APIServer<TAuthContext = undefined> {
 					// Add security requirement if authenticated
 					...(endpointConfig.authenticated ? { security: [{ bearerAuth: [] }] } : {}),
 				},
+				// Apply per-route rate limit configuration
+				...(rateLimitConfig ? { config: rateLimitConfig } : {}),
 				// Apply authentication middleware if required
 				...(endpointConfig.authenticated ? { preHandler: this.authenticateToken } : {}),
 				handler: validatedHandler,

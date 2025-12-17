@@ -251,6 +251,65 @@ app.createEndpoint({
 });
 ```
 
+### Rate Limiting
+
+The library includes rate limiting out of the box. You can configure it globally or per-endpoint.
+
+#### Global Rate Limiting
+
+```typescript
+const app = new APIServer({
+  rateLimitMax: 100,        // Max requests per window (default: 100)
+  rateLimitWindow: '15m',   // Time window (default: 15m)
+  rateLimitAllow: ['10.0.0.1'], // IPs to bypass rate limiting
+});
+```
+
+#### Per-Endpoint Rate Limiting
+
+You can customize rate limiting for individual endpoints or disable it entirely:
+
+```typescript
+// Stricter rate limit for sensitive endpoint
+app.createEndpoint({
+  method: 'POST',
+  url: '/login',
+  body: z.object({ email: z.string(), password: z.string() }),
+  response: z.object({ token: z.string() }),
+  rateLimit: { max: 5, timeWindow: '1m' },  // Only 5 attempts per minute
+  handler: async (request) => {
+    return { token: 'jwt-token' };
+  },
+});
+
+// Disable rate limiting for health check
+app.createEndpoint({
+  method: 'GET',
+  url: '/health',
+  response: z.object({ status: z.string() }),
+  rateLimit: false,  // No rate limiting
+  handler: async () => {
+    return { status: 'ok' };
+  },
+});
+
+// Use global rate limit (default behavior)
+app.createEndpoint({
+  method: 'GET',
+  url: '/users',
+  response: z.object({ users: z.array(z.any()) }),
+  // rateLimit not specified = uses global settings
+  handler: async () => {
+    return { users: [] };
+  },
+});
+```
+
+**Rate limit options per endpoint:**
+- `false` - Disable rate limiting for this endpoint
+- `{ max: number, timeWindow?: string }` - Custom rate limit (timeWindow defaults to global setting)
+- `undefined` (not specified) - Use global rate limit settings
+
 ### `app.start()`
 
 Start the server. Returns a Promise.

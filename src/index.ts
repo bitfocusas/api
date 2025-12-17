@@ -14,6 +14,7 @@ export {
 	APIServer,
 	type APIServerConfig,
 	type EndpointConfig,
+	type EndpointRateLimitConfig,
 	type AuthValidationResult,
 	type ApiTokenValidator,
 } from './api-server'

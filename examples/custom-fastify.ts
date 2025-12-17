@@ -49,7 +49,10 @@ const app = new APIServer({
 	fastify: customFastify, // 🔑 Pass your Fastify instance here
 	apiTitle: 'Custom Fastify Example',
 	apiDescription: 'API server attached to a custom Fastify instance',
-	apiTags: [{ name: 'Users', description: 'User management endpoints' }],
+	apiTags: [
+		{ name: 'Users', description: 'User management endpoints' },
+		{ name: 'System', description: 'System status and health' },
+	],
 })
 
 // Define your endpoints as usual
@@ -106,6 +109,8 @@ app.createEndpoint({
 		description: 'Create a new user',
 		tags: ['Users'],
 	},
+	// Stricter rate limit for user creation (10 requests per minute)
+	rateLimit: { max: 10, timeWindow: '1m' },
 	handler: async (request) => {
 		const { name, email } = request.body
 
@@ -115,6 +120,30 @@ app.createEndpoint({
 			name,
 			email,
 			createdAt: new Date().toISOString(),
+		}
+	},
+})
+
+// Health check endpoint with rate limiting disabled
+app.createEndpoint({
+	method: 'GET',
+	url: '/status',
+	response: z.object({
+		status: z.string().describe('Service status'),
+		uptime: z.number().describe('Uptime in seconds'),
+		timestamp: z.string().describe('Current timestamp'),
+	}),
+	config: {
+		description: 'Service status check (no rate limiting)',
+		tags: ['System'],
+	},
+	// Disable rate limiting for monitoring endpoints
+	rateLimit: false,
+	handler: async () => {
+		return {
+			status: 'healthy',
+			uptime: process.uptime(),
+			timestamp: new Date().toISOString(),
 		}
 	},
 })
@@ -138,9 +167,11 @@ console.log(`🏥 Health check: http://localhost:${port}/health`)
 console.log('\n💡 Try these commands:')
 console.log('   # Health check (custom route)')
 console.log(`   curl http://localhost:${port}/health`)
+console.log('\n   # Status check (no rate limiting)')
+console.log(`   curl http://localhost:${port}/status`)
 console.log('\n   # List users')
 console.log(`   curl http://localhost:${port}/users?limit=2`)
-console.log('\n   # Create user')
+console.log('\n   # Create user (rate limited: 10 req/min)')
 console.log(
 	`   curl -X POST http://localhost:${port}/users -H "Content-Type: application/json" -d '{"name":"John Doe","email":"john@example.com"}'`,
 )

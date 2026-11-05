@@ -59,11 +59,11 @@ describe('Rate limiting', () => {
 		expect(await hit(server, '/limited', 1, '10.0.0.2')).toEqual([200])
 	})
 
-	it('should always allow 127.0.0.1', async () => {
+	it('should rate limit localhost like any other client', async () => {
 		const server = createServer({ rateLimitMax: 1, rateLimitWindow: '1m' })
 		addEndpoint(server, '/limited')
 
-		expect(await hit(server, '/limited', 3, '127.0.0.1')).toEqual([200, 200, 200])
+		expect(await hit(server, '/limited', 2, '127.0.0.1')).toEqual([200, 429])
 	})
 
 	it('should allow addresses in rateLimitAllow', async () => {
@@ -112,7 +112,8 @@ describe('Rate limiting', () => {
 	})
 
 	it('should ignore X-Forwarded-For when trustProxy is not set', async () => {
-		const server = createServer({ rateLimitMax: 1, rateLimitWindow: '1m' })
+		// The proxy address is allowed, so a request is only limited if the forwarded address were used
+		const server = createServer({ rateLimitMax: 1, rateLimitWindow: '1m', rateLimitAllow: ['127.0.0.1'] })
 		addEndpoint(server, '/limited')
 
 		const request = { url: '/limited', remoteAddress: '127.0.0.1', headers: { 'x-forwarded-for': '10.1.1.1' } }

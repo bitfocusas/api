@@ -131,7 +131,9 @@ const app = new APIServer({
 In production mode, the library:
 - Uses JSON-formatted logs (better for log aggregation)
 - Disables pretty-printing for better performance
-- Defaults to more conservative settings
+- Never accepts the default development token: set `apiToken` or `API_TOKEN`, otherwise defining an `authenticated` endpoint throws
+
+Any `NODE_ENV` other than `production` (including `test`) is treated as development.
 
 ## 📚 Examples
 
@@ -164,8 +166,8 @@ Create a server instance. You can either let the library create its own Fastify 
 const app = new APIServer({
   port: 3000,                    // Server port (default: 3000)
   host: '127.0.0.1',            // Host (default: 127.0.0.1)
-  env: 'production',            // Environment: 'development' | 'production' (default: development)
-  logLevel: 'info',             // Log level: 'debug' | 'info' | 'warn' | 'error' (default: info)
+  env: 'production',            // Environment: 'development' | 'production' (default: from NODE_ENV)
+  logLevel: 'info',             // Log level: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent' (default: info)
   apiTitle: 'My API',           // Swagger title
   apiToken: 'secret-token',      // Bearer token for auth (string or function)
   rateLimitMax: 100,            // Max requests per window (default: 100)
@@ -265,9 +267,11 @@ The library includes rate limiting out of the box. You can configure it globally
 const app = new APIServer({
   rateLimitMax: 100,        // Max requests per window (default: 100)
   rateLimitWindow: '15m',   // Time window (default: 15m)
-  rateLimitAllow: ['10.0.0.1'], // IPs to bypass rate limiting
+  rateLimitAllow: ['10.0.0.1'], // IPs to bypass rate limiting (default: none)
 });
 ```
+
+All clients are rate limited by default, including `127.0.0.1`. Behind a reverse proxy, set `trustProxy` so that limits apply per client rather than to the proxy's address.
 
 #### Per-Endpoint Rate Limiting
 

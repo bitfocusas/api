@@ -17,6 +17,7 @@ export {
 	type EndpointRateLimitConfig,
 	type AuthValidationResult,
 	type ApiTokenValidator,
+	type LogLevel,
 } from './api-server'
 
 // Validation utilities and errors

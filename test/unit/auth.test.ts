@@ -113,6 +113,61 @@ describe('Authentication', () => {
 		})
 	})
 
+	describe('production defaults', () => {
+		it('should not accept the development token in production', () => {
+			vi.stubEnv('API_TOKEN', undefined)
+			const server = createServer({ env: 'production' })
+
+			expect(server.serverConfig.apiToken).toBeUndefined()
+			expect(() => addProtected(server)).toThrow(
+				'GET /protected: authenticated endpoints require apiToken (or API_TOKEN) to be set in production',
+			)
+			vi.unstubAllEnvs()
+		})
+
+		it('should treat any NODE_ENV other than production as development', () => {
+			vi.stubEnv('NODE_ENV', 'test')
+			const server = createServer()
+
+			expect(server.serverConfig.env).toBe('development')
+			expect(server.serverConfig.apiToken).toBe(DEFAULT_TOKEN)
+			vi.unstubAllEnvs()
+		})
+
+		it('should use API_TOKEN in production', async () => {
+			vi.stubEnv('API_TOKEN', 'prod-secret')
+			const server = createServer({ env: 'production' })
+			addProtected(server)
+
+			expect(
+				(await server.instance.inject({ url: '/protected', headers: bearer('prod-secret') })).statusCode,
+			).toBe(200)
+			expect(
+				(await server.instance.inject({ url: '/protected', headers: bearer(DEFAULT_TOKEN) })).statusCode,
+			).toBe(403)
+			vi.unstubAllEnvs()
+		})
+
+		it('should fail closed when authenticateToken is used without a token configured', async () => {
+			vi.stubEnv('API_TOKEN', undefined)
+			const server = createServer({ env: 'production' })
+			server.instance.register(async (scope) => {
+				scope.addHook('onRequest', server.authenticateToken)
+				scope.get('/admin', async () => ({ admin: true }))
+			})
+
+			const res = await server.instance.inject({ url: '/admin', headers: bearer(DEFAULT_TOKEN) })
+
+			expect(res.statusCode).toBe(500)
+			expect(res.json()).toEqual({
+				statusCode: 500,
+				error: 'Internal Server Error',
+				message: 'Authentication is not configured',
+			})
+			vi.unstubAllEnvs()
+		})
+	})
+
 	describe('custom validator', () => {
 		it('should pass the token and request to the validator', async () => {
 			const validator = vi.fn<ApiTokenValidator<{ user: string }>>(() => ({

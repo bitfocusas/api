@@ -151,7 +151,10 @@ describe('Server lifecycle', () => {
 			await server.start()
 			server.setupGracefulShutdown()
 
-			expect([...handlers.keys()].sort()).toEqual(['SIGINT', 'SIGTERM'])
+			expect([...handlers.keys()].filter((event) => event.startsWith('SIG')).sort()).toEqual([
+				'SIGINT',
+				'SIGTERM',
+			])
 
 			const stopSpy = vi.spyOn(server, 'stop')
 			await handlers.get('SIGTERM')?.()

@@ -8,6 +8,21 @@ import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fast
 import { z } from 'zod'
 import { createStandardResponses, ValidationError, ResponseValidationError, NotFoundError } from './validate'
 
+/** Token accepted by default in development, so that authenticated endpoints work out of the box */
+const DEVELOPMENT_TOKEN = 'development-token-change-in-production'
+
+export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent'
+
+function isPinoPrettyAvailable(): boolean {
+	try {
+		// pino-pretty is optional; only use it when the consumer has it installed
+		require.resolve('pino-pretty')
+		return true
+	} catch {
+		return false
+	}
+}
+
 /**
  * Helper function to apply strict validation to a Zod schema
  * Only applies strict() to object schemas that support it
@@ -117,17 +132,18 @@ export interface APIServerConfig<TAuthContext = unknown> {
 	port?: number
 	/** Server host (default: 127.0.0.1) - Only used if fastify is not provided */
 	host?: string
-	/** Environment (default: development) */
+	/** Environment (default: production if NODE_ENV is 'production', otherwise development) */
 	env?: 'development' | 'production'
 	/** Log level (default: info) - Only used if fastify is not provided */
-	logLevel?: 'debug' | 'info' | 'warn' | 'error'
+	logLevel?: LogLevel
 	/** CORS origin (default: *) */
 	corsOrigin?: string
 	/** Trusted proxies */
 	trustProxy?: string | string[] | boolean
 	/**
 	 * Bearer token for authentication or custom validator function
-	 * - String: Simple token comparison (default: development-token-change-in-production)
+	 * - String: Simple token comparison
+	 *   (default: API_TOKEN env var, or `development-token-change-in-production` in development only)
 	 * - Function: Custom validation logic with typed context
 	 */
 	apiToken?: string | ApiTokenValidator<TAuthContext>
@@ -135,7 +151,7 @@ export interface APIServerConfig<TAuthContext = unknown> {
 	rateLimitMax?: number
 	/** Rate limit time window (default: 15m) */
 	rateLimitWindow?: string
-	/** Rate limit allow ip addresses */
+	/** IP addresses that are never rate limited (default: none) */
 	rateLimitAllow?: string[]
 	/** Enable Prometheus metrics endpoint at /metrics (default: true) */
 	metricsEnabled?: boolean
@@ -243,7 +259,7 @@ export interface EndpointConfig<
 export class APIServer<TAuthContext = undefined> {
 	private fastify: FastifyInstance
 	private config: Required<Omit<APIServerConfig<TAuthContext>, 'apiToken' | 'fastify' | 'trustProxy'>> & {
-		apiToken: string | ApiTokenValidator<TAuthContext>
+		apiToken?: string | ApiTokenValidator<TAuthContext>
 		fastify?: FastifyInstance
 		trustProxy?: string | string[] | boolean
 	}
@@ -251,46 +267,51 @@ export class APIServer<TAuthContext = undefined> {
 	private ownsFastifyInstance = false
 
 	constructor(config: APIServerConfig<TAuthContext> = {}) {
-		// Check if user provided their own Fastify instance
+		// Merge with defaults, prioritizing config over env vars
+		const env = config.env ?? (process.env.NODE_ENV === 'production' ? 'production' : 'development')
+		this.config = {
+			fastify: config.fastify,
+			port: config.port ?? Number.parseInt(process.env.PORT || '3000', 10),
+			host: config.host ?? process.env.HOST ?? '127.0.0.1',
+			env,
+			logLevel: config.logLevel ?? (process.env.LOG_LEVEL as LogLevel | undefined) ?? 'info',
+			corsOrigin: config.corsOrigin ?? process.env.CORS_ORIGIN ?? '*',
+			trustProxy: config.trustProxy,
+			// The well-known development token is never accepted in production
+			apiToken:
+				config.apiToken ?? process.env.API_TOKEN ?? (env === 'development' ? DEVELOPMENT_TOKEN : undefined),
+			rateLimitMax: config.rateLimitMax ?? Number.parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+			rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
+			rateLimitAllow: config.rateLimitAllow ?? [],
+			metricsEnabled: config.metricsEnabled ?? process.env.METRICS_ENABLED !== 'false',
+			apiTitle: config.apiTitle ?? 'API Documentation',
+			apiDescription: config.apiDescription ?? 'API built with Fastify, Zod, and TypeScript',
+			apiVersion: config.apiVersion ?? '1.0.0',
+			apiTags: config.apiTags ?? [],
+		}
+
 		if (config.fastify) {
-			// Use provided Fastify instance
+			// Attach to the user's Fastify instance; they are responsible for starting/stopping it
 			this.fastify = config.fastify
 			this.ownsFastifyInstance = false
-
-			// Set up Zod validation on the provided instance
-			this.fastify.setValidatorCompiler(validatorCompiler)
-			this.fastify.setSerializerCompiler(serializerCompiler)
 		} else {
-			// Create our own Fastify instance
 			this.ownsFastifyInstance = true
 
-			// Merge with defaults, prioritizing config over env vars
-			const logLevel = (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error'
-
 			// Configure pretty logging for development if pino-pretty is available
-			let loggerTransport: { target: string; options: Record<string, unknown> } | undefined = undefined
-			const env = (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production'
-			if (env === 'development') {
-				try {
-					// Check if pino-pretty is available (it's a devDependency)
-					require.resolve('pino-pretty')
-					loggerTransport = {
-						target: 'pino-pretty',
-						options: {
-							translateTime: 'HH:MM:ss Z',
-							ignore: 'pid,hostname',
-						},
-					}
-				} catch {
-					// pino-pretty not available, use default JSON logging
-					// This is fine in production or if pino-pretty isn't installed
+			let loggerTransport: { target: string; options: Record<string, unknown> } | undefined
+			if (env === 'development' && isPinoPrettyAvailable()) {
+				loggerTransport = {
+					target: 'pino-pretty',
+					options: {
+						translateTime: 'HH:MM:ss Z',
+						ignore: 'pid,hostname',
+					},
 				}
 			}
 
-			// Initialize Fastify
 			this.fastify = fastify({
 				logger: {
-					level: logLevel,
+					level: this.config.logLevel,
 					transport: loggerTransport,
 				},
 				ajv: {
@@ -301,31 +322,11 @@ export class APIServer<TAuthContext = undefined> {
 				},
 				trustProxy: config.trustProxy,
 			})
-
-			// Set up Zod validation
-			this.fastify.setValidatorCompiler(validatorCompiler)
-			this.fastify.setSerializerCompiler(serializerCompiler)
 		}
 
-		// Merge with defaults, prioritizing config over env vars
-		this.config = {
-			fastify: config.fastify,
-			port: config.port ?? Number.parseInt(process.env.PORT || '3000', 10),
-			host: config.host ?? process.env.HOST ?? '127.0.0.1',
-			env: (config.env ?? process.env.NODE_ENV ?? 'development') as 'development' | 'production',
-			logLevel: (config.logLevel ?? process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
-			corsOrigin: config.corsOrigin ?? process.env.CORS_ORIGIN ?? '*',
-			trustProxy: config.trustProxy,
-			apiToken: config.apiToken ?? process.env.API_TOKEN ?? 'development-token-change-in-production',
-			rateLimitMax: config.rateLimitMax ?? Number.parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-			rateLimitWindow: config.rateLimitWindow ?? process.env.RATE_LIMIT_WINDOW ?? '15m',
-			rateLimitAllow: config.rateLimitAllow ?? [],
-			metricsEnabled: config.metricsEnabled ?? process.env.METRICS_ENABLED !== 'false',
-			apiTitle: config.apiTitle ?? 'API Documentation',
-			apiDescription: config.apiDescription ?? 'API built with Fastify, Zod, and TypeScript',
-			apiVersion: config.apiVersion ?? '1.0.0',
-			apiTags: config.apiTags ?? [],
-		}
+		// Set up Zod validation
+		this.fastify.setValidatorCompiler(validatorCompiler)
+		this.fastify.setSerializerCompiler(serializerCompiler)
 
 		// Register plugins at root level - these must be registered before any routes
 		this.registerPlugins()
@@ -346,7 +347,7 @@ export class APIServer<TAuthContext = undefined> {
 			max: this.config.rateLimitMax,
 			timeWindow: this.config.rateLimitWindow,
 			cache: 10000,
-			allowList: ['127.0.0.1', ...this.config.rateLimitAllow],
+			allowList: this.config.rateLimitAllow,
 			redis: undefined,
 			skipOnError: true,
 			nameSpace: 'faz:',
@@ -435,7 +436,8 @@ export class APIServer<TAuthContext = undefined> {
 	 * Get the server configuration
 	 */
 	get serverConfig(): Readonly<
-		Required<Omit<APIServerConfig<TAuthContext>, 'fastify' | 'trustProxy'>> & {
+		Required<Omit<APIServerConfig<TAuthContext>, 'apiToken' | 'fastify' | 'trustProxy'>> & {
+			apiToken?: string | ApiTokenValidator<TAuthContext>
 			fastify?: FastifyInstance
 			trustProxy?: string | string[] | boolean
 		}
@@ -466,6 +468,12 @@ export class APIServer<TAuthContext = undefined> {
 		TParams extends z.ZodTypeAny = z.ZodUndefined,
 		TResponse extends z.ZodTypeAny = z.ZodVoid,
 	>(endpointConfig: EndpointConfig<TQuery, TBody, TParams, TResponse, TAuthContext>): void {
+		if (endpointConfig.authenticated && this.config.apiToken === undefined) {
+			throw new Error(
+				`${endpointConfig.method} ${endpointConfig.url}: authenticated endpoints require apiToken (or API_TOKEN) to be set in production`,
+			)
+		}
+
 		if (endpointConfig.method === 'GET' && endpointConfig.body) {
 			throw new Error(`GET ${endpointConfig.url}: a body schema is not supported on GET endpoints`)
 		}
@@ -610,6 +618,16 @@ export class APIServer<TAuthContext = undefined> {
 		}
 
 		const token = parts[1]
+
+		// Fail closed if no token has been configured (production without apiToken/API_TOKEN)
+		if (this.config.apiToken === undefined) {
+			request.log.error('Authentication is not configured: set apiToken or API_TOKEN')
+			return reply.code(500).send({
+				statusCode: 500,
+				error: 'Internal Server Error',
+				message: 'Authentication is not configured',
+			})
+		}
 
 		// Check if apiToken is a function (custom validator) or string (simple comparison)
 		if (typeof this.config.apiToken === 'function') {

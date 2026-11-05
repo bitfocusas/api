@@ -10,7 +10,7 @@ export const REMOTE_IP = '10.0.0.1'
 export type AnyAPIServer = APIServer<any>
 
 /**
- * Create servers with quiet, deterministic defaults and close them after each test.
+ * Create servers with deterministic defaults (logging is silenced via LOG_LEVEL in vitest.config.mts) and close them after each test.
  * Requests are made with `instance.inject()`, so no ports are bound.
  */
 export function useTestServers() {
@@ -26,7 +26,6 @@ export function useTestServers() {
 		config: APIServerConfig<TAuthContext> = {},
 	): APIServer<TAuthContext> {
 		const server = new APIServer<TAuthContext>({
-			logLevel: 'error',
 			metricsEnabled: false,
 			loadEnv: false,
 			...config,

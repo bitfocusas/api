@@ -5,6 +5,10 @@ export default defineConfig({
 		globals: true,
 		environment: 'node',
 		include: ['test/**/*.test.ts'],
+		// Fastify/pino logs go straight to stdout, so silence them via the env var the library reads
+		env: { LOG_LEVEL: 'silent' },
+		// Only show console output (e.g. the start() banner) for failing tests
+		silent: 'passed-only',
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],

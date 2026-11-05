@@ -18,7 +18,7 @@ export {
 	type AuthValidationResult,
 	type ApiTokenValidator,
 	type LogLevel,
-} from './api-server'
+} from './api-server.js'
 
 // Validation utilities and errors
 export {
@@ -27,7 +27,7 @@ export {
 	ResponseValidationError,
 	ErrorResponseSchema,
 	createStandardResponses,
-} from './validate'
+} from './validate.js'
 
 // Re-export Zod for convenience
 export { z } from 'zod'

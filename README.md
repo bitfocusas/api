@@ -18,7 +18,7 @@ Built on [Fastify](https://www.fastify.io/) (fast) and [Zod](https://zod.dev/) (
 npm install @bitfocusas/api
 ```
 
-Requires Node.js 24 or later.
+Requires Node.js 24 or later. The package is ESM-only; CommonJS projects can still load it with `require('@bitfocusas/api')`, which Node 24 supports for ES modules.
 
 ## Quick Start
 

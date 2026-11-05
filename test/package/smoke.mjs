@@ -1,20 +1,20 @@
-// Smoke test for the compiled package, loaded the way consumers load it (CommonJS require of dist/).
-// This catches problems vitest can't see, such as a dependency becoming ESM-only. Run after `yarn build`.
-const assert = require('node:assert/strict')
-const fs = require('node:fs')
-const path = require('node:path')
+// Smoke test for the compiled package, loaded the way consumers load it (by package name, via its exports).
+// This catches problems vitest can't see, such as broken ESM interop with a CommonJS dependency.
+// Run after `yarn build`.
+import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 
-const pkg = require('../../package.json')
-const root = path.join(__dirname, '../..')
+const require = createRequire(import.meta.url)
 
 async function main() {
-	assert.ok(fs.existsSync(path.join(root, pkg.main)), `missing ${pkg.main}`)
-	assert.ok(fs.existsSync(path.join(root, pkg.types)), `missing ${pkg.types}`)
-
-	const lib = require(path.join(root, pkg.main))
+	// Self-reference by package name, so the `exports` map is what gets tested
+	const lib = await import('@bitfocusas/api')
 	for (const name of ['APIServer', 'z', 'ValidationError', 'NotFoundError', 'ResponseValidationError']) {
 		assert.ok(lib[name], `missing export ${name}`)
 	}
+
+	// CommonJS consumers can require() the ESM build on Node 24+
+	assert.equal(require('@bitfocusas/api').APIServer, lib.APIServer)
 
 	const { APIServer, z } = lib
 	const server = new APIServer({ logLevel: 'error', metricsEnabled: true, apiToken: 'secret' })
@@ -58,7 +58,4 @@ async function main() {
 	console.log('dist smoke test passed')
 }
 
-main().catch((err) => {
-	console.error(err)
-	process.exit(1)
-})
+await main()

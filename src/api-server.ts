@@ -1,12 +1,25 @@
 import cors from '@fastify/cors'
-import fastify, { type FastifyError, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
+import fastify, {
+	type FastifyError,
+	type FastifyInstance,
+	type FastifyPluginCallback,
+	type FastifyReply,
+	type FastifyRequest,
+} from 'fastify'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import rateLimit from '@fastify/rate-limit'
-import metricsPlugin from 'fastify-metrics'
+import fastifyMetrics, { type IMetricsPluginRegisterOptions } from 'fastify-metrics'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
+import { createRequire } from 'node:module'
 import { z } from 'zod'
-import { createStandardResponses, ValidationError, ResponseValidationError, NotFoundError } from './validate'
+import { createStandardResponses, ValidationError, ResponseValidationError, NotFoundError } from './validate.js'
+
+// fastify-metrics is CommonJS with an `exports.default`, which Node's ESM loader exposes as `.default`
+// (bundlers and test runners may already unwrap it)
+type MetricsPlugin = FastifyPluginCallback<Partial<IMetricsPluginRegisterOptions>>
+const metricsModule = fastifyMetrics as unknown as MetricsPlugin | { default: MetricsPlugin }
+const metricsPlugin = 'default' in metricsModule ? metricsModule.default : metricsModule
 
 /** Token accepted by default in development, so that authenticated endpoints work out of the box */
 const DEVELOPMENT_TOKEN = 'development-token-change-in-production'
@@ -16,7 +29,7 @@ export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' |
 function isPinoPrettyAvailable(): boolean {
 	try {
 		// pino-pretty is optional; only use it when the consumer has it installed
-		require.resolve('pino-pretty')
+		createRequire(import.meta.url).resolve('pino-pretty')
 		return true
 	} catch {
 		return false

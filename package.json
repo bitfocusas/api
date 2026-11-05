@@ -2,6 +2,14 @@
 	"name": "@bitfocusas/api",
 	"version": "1.2.2",
 	"description": "Fastify API server with Zod validation - a type-safe, production-ready API library",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"repository": {
@@ -28,7 +36,7 @@
 		"test:unit": "vitest run test/unit",
 		"test:e2e": "vitest run test/e2e",
 		"test:types": "vitest run test/types",
-		"test:dist": "node test/package/smoke.cjs",
+		"test:dist": "node test/package/smoke.mjs",
 		"lint": "biome check",
 		"release": "release-it",
 		"prepare": "husky"

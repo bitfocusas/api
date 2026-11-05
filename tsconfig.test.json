@@ -6,5 +6,5 @@
 		"module": "preserve",
 		"moduleResolution": "bundler"
 	},
-	"include": ["src/**/*", "test/**/*", "examples/**/*", "vitest.config.mts"]
+	"include": ["src/**/*", "test/**/*", "examples/**/*", "vitest.config.ts"]
 }

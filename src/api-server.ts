@@ -1,5 +1,5 @@
 import cors from '@fastify/cors'
-import fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
+import fastify, { type FastifyError, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
 import rateLimit from '@fastify/rate-limit'
@@ -28,6 +28,55 @@ function generateOperationId(url: string, method: string): string {
 	const pathPart = cleanUrl.replace(/\//g, '_')
 	const methodPart = method.toLowerCase()
 	return `${pathPart}_${methodPart}`
+}
+
+/**
+ * Error handler for endpoints created with createEndpoint, so that all request validation
+ * errors share one response shape. Errors it doesn't recognise are rethrown, which passes
+ * them on to the Fastify instance's own error handler.
+ */
+function handleEndpointError(error: unknown, _request: FastifyRequest, reply: FastifyReply) {
+	if (error instanceof NotFoundError) {
+		return reply.code(404).send({ statusCode: 404, error: 'Not Found', message: error.message })
+	}
+
+	if (error instanceof ValidationError) {
+		return reply.code(400).send(validationFailed(error.details))
+	}
+
+	// Request validation failures raised by Fastify from the route schema
+	if (isFastifyValidationError(error)) {
+		return reply.code(400).send(
+			validationFailed(
+				error.validation.map((issue) => {
+					const context = error.validationContext === 'querystring' ? 'query' : error.validationContext
+					const path = issue.instancePath.split('/').filter(Boolean)
+					return { field: [context, ...path].join('.'), message: issue.message ?? 'Invalid value' }
+				}),
+			),
+		)
+	}
+
+	if (error instanceof ResponseValidationError) {
+		// Details are logged rather than returned, as they can reveal what the server tried to send
+		return reply.code(500).send({
+			statusCode: 500,
+			error: 'Internal Server Error',
+			message: 'Response validation failed - server returned invalid data',
+		})
+	}
+
+	throw error
+}
+
+function validationFailed(details: Array<{ field: string; message: string }>) {
+	return { statusCode: 400, error: 'Bad Request', message: 'Validation failed', details }
+}
+
+function isFastifyValidationError(
+	error: unknown,
+): error is FastifyError & Required<Pick<FastifyError, 'validation' | 'validationContext'>> {
+	return error instanceof Error && Array.isArray((error as FastifyError).validation)
 }
 
 /**
@@ -417,137 +466,29 @@ export class APIServer<TAuthContext = undefined> {
 		TParams extends z.ZodTypeAny = z.ZodUndefined,
 		TResponse extends z.ZodTypeAny = z.ZodVoid,
 	>(endpointConfig: EndpointConfig<TQuery, TBody, TParams, TResponse, TAuthContext>): void {
-		// Validate request data (query and body) before handler execution
-		const validatedHandler = async (request: FastifyRequest, reply: FastifyReply) => {
-			try {
-				// Validate query parameters
-				let validatedQuery: TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined =
-					undefined as TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined
-				if (endpointConfig.query) {
-					const strictQuery = applyStrict(endpointConfig.query)
-					const queryResult = strictQuery.safeParse(request.query)
-					if (!queryResult.success) {
-						throw new ValidationError(
-							queryResult.error.issues.map((err: z.ZodIssue) => ({
-								field: `query.${err.path.join('.')}`,
-								message: err.message,
-							})),
-						)
-					}
-					validatedQuery = queryResult.data as TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined
-				}
+		if (endpointConfig.method === 'GET' && endpointConfig.body) {
+			throw new Error(`GET ${endpointConfig.url}: a body schema is not supported on GET endpoints`)
+		}
 
-				// Validate body parameters
-				let validatedBody: TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined =
-					undefined as TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined
-				if (endpointConfig.body) {
-					const strictBody = applyStrict(endpointConfig.body)
-					const bodyResult = strictBody.safeParse(request.body)
-					if (!bodyResult.success) {
-						throw new ValidationError(
-							bodyResult.error.issues.map((err: z.ZodIssue) => ({
-								field: `body.${err.path.join('.')}`,
-								message: err.message,
-							})),
-						)
-					}
-					validatedBody = bodyResult.data as TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined
-				}
+		// Query, body and params have already been parsed and validated by Fastify using the route schema
+		const handler = async (request: FastifyRequest, reply: FastifyReply) => {
+			const result = await endpointConfig.handler(request as Parameters<typeof endpointConfig.handler>[0], reply)
 
-				// Validate path parameters
-				let validatedParams: TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined =
-					undefined as TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined
-				if (endpointConfig.params) {
-					const strictParams = applyStrict(endpointConfig.params)
-					const paramsResult = strictParams.safeParse(request.params)
-					if (!paramsResult.success) {
-						throw new ValidationError(
-							paramsResult.error.issues.map((err: z.ZodIssue) => ({
-								field: `params.${err.path.join('.')}`,
-								message: err.message,
-							})),
-						)
-					}
-					validatedParams = paramsResult.data as TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined
-				}
-
-				// Create typed request object
-				const typedRequest = {
-					...request,
-					query: validatedQuery,
-					body: validatedBody,
-					params: validatedParams,
-					auth: (request as FastifyRequest & { auth?: TAuthContext }).auth,
-				} as FastifyRequest & {
-					query: TQuery extends z.ZodTypeAny ? z.infer<TQuery> : undefined
-					body: TBody extends z.ZodTypeAny ? z.infer<TBody> : undefined
-					params: TParams extends z.ZodTypeAny ? z.infer<TParams> : undefined
-					auth?: TAuthContext
-				}
-
-				// Execute the handler
-				const result = await endpointConfig.handler(typedRequest, reply)
-
-				// Validate response before sending
-				const strictResponse = applyStrict(endpointConfig.response)
-				const responseResult = strictResponse.safeParse(result)
-				if (!responseResult.success) {
-					console.error(
-						'Response validation failed:',
-						JSON.stringify(
-							{
-								url: request.url,
-								method: request.method,
-								errors: responseResult.error.issues,
-								response: result,
-							},
-							null,
-							2,
-						),
-					)
-					throw new ResponseValidationError(
-						responseResult.error.issues.map((err: z.ZodIssue) => ({
-							field: err.path.join('.') || 'root',
-							message: err.message,
-						})),
-					)
-				}
-				return result
-			} catch (error) {
-				// Handle NotFoundError
-				if (error instanceof NotFoundError) {
-					return reply.code(404).send({
-						statusCode: 404,
-						error: 'Not Found',
-						message: error.message,
-					})
-				}
-
-				// Handle validation errors
-				if (error instanceof ValidationError) {
-					const response = {
-						statusCode: 400,
-						error: 'Bad Request',
-						message: 'Validation failed',
-						details: error.details,
-					}
-					return reply.code(400).send(response)
-				}
-
-				// Handle response validation errors
-				if (error instanceof ResponseValidationError) {
-					const response = {
-						statusCode: 500,
-						error: 'Internal Server Error',
-						message: 'Response validation failed - server returned invalid data',
-						details: error.details,
-					}
-					return reply.code(500).send(response)
-				}
-
-				// Re-throw other errors to be handled by Fastify's error handler
-				throw error
+			// Validate the response before sending, so that invalid or leaky data is never serialized
+			const responseResult = applyStrict(endpointConfig.response).safeParse(result)
+			if (!responseResult.success) {
+				request.log.error(
+					{ errors: responseResult.error.issues, response: result },
+					'Response validation failed',
+				)
+				throw new ResponseValidationError(
+					responseResult.error.issues.map((err: z.core.$ZodIssue) => ({
+						field: err.path.join('.') || 'root',
+						message: err.message,
+					})),
+				)
 			}
+			return result
 		}
 
 		// Generate operationId automatically from URL and method
@@ -626,7 +567,8 @@ export class APIServer<TAuthContext = undefined> {
 				...(rateLimitConfig ? { config: rateLimitConfig } : {}),
 				// Apply authentication middleware if required
 				...(endpointConfig.authenticated ? { preHandler: this.authenticateToken } : {}),
-				handler: validatedHandler,
+				errorHandler: handleEndpointError,
+				handler,
 			})
 		})
 	}

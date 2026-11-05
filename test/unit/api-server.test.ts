@@ -164,9 +164,9 @@ describe('APIServer', () => {
 			const response = await supertest(server.instance.server).get('/validate-query?age=-5').expect(400)
 
 			expect(response.body.statusCode).toBe(400)
-			// Fastify's validation error returns the Zod error directly
-			expect(response.body.code).toBe('FST_ERR_VALIDATION')
 			expect(response.body.error).toBe('Bad Request')
+			expect(response.body.message).toBe('Validation failed')
+			expect(response.body.details).toEqual([{ field: 'query.age', message: expect.any(String) }])
 		})
 
 		it('should return 400 for invalid body', async () => {
@@ -193,8 +193,8 @@ describe('APIServer', () => {
 				.expect(400)
 
 			expect(response.body.statusCode).toBe(400)
-			expect(response.body.code).toBe('FST_ERR_VALIDATION')
 			expect(response.body.error).toBe('Bad Request')
+			expect(response.body.details.map((d: { field: string }) => d.field)).toEqual(['body.email', 'body.age'])
 		})
 
 		it('should reject unexpected fields in request body (strict mode)', async () => {
@@ -275,14 +275,8 @@ describe('APIServer', () => {
 
 			expect(response.body.statusCode).toBe(400)
 			expect(response.body.message).toBe('Validation failed')
-			// Custom ValidationError should have details
-			if (response.body.details) {
-				expect(response.body.details[0].field).toBe('body.email')
-				expect(response.body.details[0].message).toBe('Email already taken')
-			} else {
-				// If details not present, at least error message should indicate validation issue
-				expect(response.body.error).toBe('Bad Request')
-			}
+			expect(response.body.details[0].field).toBe('body.email')
+			expect(response.body.details[0].message).toBe('Email already taken')
 		})
 
 		it('should handle NotFoundError thrown in handler', async () => {

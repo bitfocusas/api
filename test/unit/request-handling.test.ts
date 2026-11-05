@@ -64,7 +64,7 @@ describe('Request handling', () => {
 			expect(handler.mock.calls[0][0].params.id).toBe(42)
 		})
 
-		it('should reject invalid params with a Fastify validation error', async () => {
+		it('should reject invalid params', async () => {
 			const server = createServer()
 			const handler = vi.fn(async () => ({ id: 1 }))
 			server.createEndpoint({
@@ -78,9 +78,12 @@ describe('Request handling', () => {
 			const res = await server.instance.inject({ url: '/items/abc' })
 
 			expect(res.statusCode).toBe(400)
-			const body = res.json()
-			expect(body).toMatchObject({ statusCode: 400, code: 'FST_ERR_VALIDATION', error: 'Bad Request' })
-			expect(body.message).toContain('params/id')
+			expect(res.json()).toEqual({
+				statusCode: 400,
+				error: 'Bad Request',
+				message: 'Validation failed',
+				details: [{ field: 'params.id', message: 'Invalid input: expected number, received NaN' }],
+			})
 			expect(handler).not.toHaveBeenCalled()
 		})
 
@@ -149,8 +152,7 @@ describe('Request handling', () => {
 			const res = await server.instance.inject({ url: '/search?unknown=1' })
 
 			expect(res.statusCode).toBe(400)
-			expect(res.json()).toMatchObject({ code: 'FST_ERR_VALIDATION' })
-			expect(res.json().message).toContain('unknown')
+			expect(res.json().details).toEqual([{ field: 'query', message: 'Unrecognized key: "unknown"' }])
 		})
 
 		it('should reject any query keys when no query schema is defined', async () => {
@@ -206,7 +208,9 @@ describe('Request handling', () => {
 			})
 
 			expect(res.statusCode).toBe(400)
-			expect(res.json().message).toContain('body/user/age')
+			expect(res.json().details).toEqual([
+				{ field: 'body.user.age', message: 'Invalid input: expected number, received string' },
+			])
 		})
 
 		it('should reject a missing body', async () => {
@@ -222,7 +226,8 @@ describe('Request handling', () => {
 			const res = await server.instance.inject({ method: 'POST', url: '/needs-body' })
 
 			expect(res.statusCode).toBe(400)
-			expect(res.json()).toMatchObject({ statusCode: 400, code: 'FST_ERR_VALIDATION' })
+			expect(res.json()).toMatchObject({ statusCode: 400, message: 'Validation failed' })
+			expect(res.json().details).toEqual([{ field: 'body', message: expect.stringContaining('expected object') }])
 		})
 
 		it('should reject malformed JSON', async () => {
@@ -263,72 +268,65 @@ describe('Request handling', () => {
 		})
 	})
 
-	describe('Library-level validation (after Fastify validation)', () => {
-		// Fastify validates with the same schemas first, so these branches are only reachable
-		// when something (e.g. a preHandler hook) changes the request after Fastify validation.
-		it('should return 400 when query is invalid at handler time', async () => {
+	describe('Validated request data', () => {
+		it('should pass the request validated by Fastify to the handler unchanged', async () => {
 			const server = createServer()
 			server.instance.addHook('preHandler', async (request) => {
-				request.query = { limit: 'not-a-number' }
+				request.query = { limit: 99 }
 			})
 			server.createEndpoint({
 				method: 'GET',
 				url: '/q',
 				query: z.object({ limit: z.coerce.number().optional() }),
-				response: z.object({}),
-				handler: async () => ({}),
+				response: z.object({ limit: z.number().optional() }),
+				handler: async (request) => request.query,
 			})
 
-			const res = await server.instance.inject({ url: '/q' })
+			const res = await server.instance.inject({ url: '/q?limit=1' })
 
-			expect(res.statusCode).toBe(400)
-			// `details` is dropped by the response serializer (ErrorResponseSchema is strict)
-			expect(res.json()).toEqual({ statusCode: 400, error: 'Bad Request', message: 'Validation failed' })
+			expect(res.statusCode).toBe(200)
+			expect(res.json()).toEqual({ limit: 99 })
 		})
 
-		it('should return 400 when body is invalid at handler time', async () => {
+		it('should reject a body schema on GET endpoints', () => {
 			const server = createServer()
-			server.instance.addHook('preHandler', async (request) => {
-				request.body = { a: 1 }
-			})
+
+			expect(() =>
+				server.createEndpoint({
+					method: 'GET',
+					url: '/get-with-body',
+					body: z.object({ a: z.string() }),
+					response: z.object({}),
+					handler: async () => ({}),
+				}),
+			).toThrow('GET /get-with-body: a body schema is not supported on GET endpoints')
+		})
+
+		it('should report every failing field', async () => {
+			const server = createServer()
 			server.createEndpoint({
 				method: 'POST',
-				url: '/b',
-				body: z.object({ a: z.string() }),
+				url: '/many',
+				body: z.object({ a: z.string(), b: z.number() }),
 				response: z.object({}),
 				handler: async () => ({}),
 			})
 
-			const res = await server.instance.inject({ method: 'POST', url: '/b', payload: { a: 'ok' } })
+			const res = await server.instance.inject({ method: 'POST', url: '/many', payload: { a: 1, b: 'x' } })
 
-			expect(res.statusCode).toBe(400)
-			expect(res.json()).toEqual({ statusCode: 400, error: 'Bad Request', message: 'Validation failed' })
-		})
-
-		it('should return 400 when params are invalid at handler time', async () => {
-			const server = createServer()
-			server.instance.addHook('preHandler', async (request) => {
-				request.params = { id: 'abc' }
-			})
-			server.createEndpoint({
-				method: 'GET',
-				url: '/p/:id',
-				params: z.object({ id: z.string().regex(/^\d+$/) }),
-				response: z.object({}),
-				handler: async () => ({}),
-			})
-
-			const res = await server.instance.inject({ url: '/p/123' })
-
-			expect(res.statusCode).toBe(400)
-			expect(res.json()).toEqual({ statusCode: 400, error: 'Bad Request', message: 'Validation failed' })
+			expect(res.json().details.map((d: { field: string }) => d.field)).toEqual(['body.a', 'body.b'])
 		})
 	})
 
 	describe('Response validation', () => {
 		it('should return 500 and log when response has extra fields (strict)', async () => {
-			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 			const server = createServer()
+			const logs: unknown[] = []
+			server.instance.addHook('onRequest', async (request) => {
+				vi.spyOn(request.log, 'error').mockImplementation((...args: unknown[]) => {
+					logs.push(args)
+				})
+			})
 			server.createEndpoint({
 				method: 'GET',
 				url: '/leaky',
@@ -346,11 +344,13 @@ describe('Request handling', () => {
 				message: 'Response validation failed - server returned invalid data',
 			})
 			expect(res.body).not.toContain('secret')
-			expect(errorSpy).toHaveBeenCalledWith('Response validation failed:', expect.stringContaining('/leaky'))
+			expect(logs).toContainEqual([
+				expect.objectContaining({ response: { id: '1', password: 'secret' } }),
+				'Response validation failed',
+			])
 		})
 
 		it('should return 500 when a non-object response is invalid', async () => {
-			vi.spyOn(console, 'error').mockImplementation(() => {})
 			const server = createServer()
 			server.createEndpoint({
 				method: 'GET',
@@ -431,8 +431,12 @@ describe('Request handling', () => {
 			const res = await server.instance.inject({ method: 'POST', url: '/v', payload: { email: 'a' } })
 
 			expect(res.statusCode).toBe(400)
-			// `details` is dropped by the response serializer (ErrorResponseSchema is strict)
-			expect(res.json()).toEqual({ statusCode: 400, error: 'Bad Request', message: 'Validation failed' })
+			expect(res.json()).toEqual({
+				statusCode: 400,
+				error: 'Bad Request',
+				message: 'Validation failed',
+				details: [{ field: 'body.email', message: 'taken' }],
+			})
 		})
 
 		it('should pass other errors to the Fastify error handler as 500', async () => {
@@ -528,10 +532,7 @@ describe('Request handling', () => {
 			expect(res.json()).toEqual({ id: expect.any(String), hasLog: true, rawHeader: 'value' })
 		})
 
-		// Known issue: the handler receives a spread copy of the Fastify request, so properties
-		// implemented as prototype getters (headers, ip, url, method, hostname, ...) are lost.
-		// When this is fixed, flip `it.fails` to `it`.
-		it.fails('should expose request.headers and request.ip in handlers', async () => {
+		it('should expose request.headers and request.ip in handlers', async () => {
 			const server = createServer()
 			server.createEndpoint({
 				method: 'GET',
@@ -546,9 +547,7 @@ describe('Request handling', () => {
 			expect(res.json()).toEqual({ header: 'value', ip: '127.0.0.1' })
 		})
 
-		// Known issue: the library re-parses the already-transformed data from Fastify validation,
-		// so schemas with .transform() fail. When this is fixed, flip `it.fails` to `it`.
-		it.fails('should support zod transforms in body schemas', async () => {
+		it('should support zod transforms in body schemas', async () => {
 			const server = createServer()
 			server.createEndpoint({
 				method: 'POST',

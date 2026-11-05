@@ -534,6 +534,19 @@ app.instance.register(yourPlugin);
 
 ## Error Handling
 
+Invalid requests (query, body or path parameters that don't match their schema) and `ValidationError`s thrown by handlers return the same 400 response:
+
+```json
+{
+  "statusCode": 400,
+  "error": "Bad Request",
+  "message": "Validation failed",
+  "details": [{ "field": "body.email", "message": "Invalid email address" }]
+}
+```
+
+`field` is prefixed with `query`, `body` or `params`. Other errors are passed to the Fastify instance's error handler.
+
 ### `ValidationError`
 
 Throw custom validation errors (returns 400):

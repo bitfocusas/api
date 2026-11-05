@@ -168,7 +168,7 @@ describe('Basic Example E2E', () => {
 
 		expect(response.body.statusCode).toBe(400)
 		expect(response.body.error).toBe('Bad Request')
-		expect(response.body.code).toBe('FST_ERR_VALIDATION')
+		expect(response.body.details).toEqual([{ field: 'body.email', message: 'Invalid email address' }])
 	})
 
 	it('should validate name length', async () => {
@@ -184,7 +184,7 @@ describe('Basic Example E2E', () => {
 			.expect(400)
 
 		expect(response1.body.statusCode).toBe(400)
-		expect(response1.body.code).toBe('FST_ERR_VALIDATION')
+		expect(response1.body.details).toEqual([{ field: 'body.name', message: 'Name is required' }])
 
 		// Test name too long
 		const longName = 'a'.repeat(101)
@@ -212,7 +212,7 @@ describe('Basic Example E2E', () => {
 			.expect(400)
 
 		expect(response.body.statusCode).toBe(400)
-		expect(response.body.code).toBe('FST_ERR_VALIDATION')
+		expect(response.body.details).toEqual([{ field: 'body.age', message: 'Age must be a positive number' }])
 	})
 
 	it('should reject duplicate email', async () => {
@@ -240,14 +240,8 @@ describe('Basic Example E2E', () => {
 
 		expect(response.body.statusCode).toBe(400)
 		expect(response.body.message).toBe('Validation failed')
-		// Custom ValidationError should have details
-		if (response.body.details) {
-			expect(response.body.details[0].field).toBe('body.email')
-			expect(response.body.details[0].message).toBe('User with this email already exists')
-		} else {
-			// If details not present, at least error message should indicate validation issue
-			expect(response.body.error).toBe('Bad Request')
-		}
+		expect(response.body.details[0].field).toBe('body.email')
+		expect(response.body.details[0].message).toBe('User with this email already exists')
 	})
 
 	it('should create user without optional age field', async () => {

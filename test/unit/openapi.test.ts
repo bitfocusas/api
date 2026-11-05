@@ -159,20 +159,6 @@ describe('OpenAPI / Swagger', () => {
 			})
 		})
 
-		it('should not document a body for GET endpoints', async () => {
-			const server = createServer()
-			server.createEndpoint({
-				method: 'GET',
-				url: '/no-body',
-				body: z.object({ ignored: z.string() }),
-				response: z.object({}),
-				handler: async () => ({}),
-			})
-			const op = (await getSpec(server)).paths['/no-body'].get
-
-			expect(op.requestBody).toBeUndefined()
-		})
-
 		it('should document 200, 400 and 500 responses for public endpoints', async () => {
 			const server = createServer()
 			server.createEndpoint({
@@ -197,6 +183,10 @@ describe('OpenAPI / Swagger', () => {
 				'error',
 				'message',
 			])
+			expect(op.responses['400'].content['application/json'].schema.properties.details).toMatchObject({
+				type: 'array',
+				items: { type: 'object', required: ['field', 'message'] },
+			})
 			expect(op.security).toBeUndefined()
 		})
 

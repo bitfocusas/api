@@ -8,6 +8,15 @@ export const ErrorResponseSchema = z.object({
 	code: z.string().optional().describe('Error code'),
 	error: z.string().describe('Error name'),
 	message: z.string().describe('Error message'),
+	details: z
+		.array(
+			z.object({
+				field: z.string().describe('Location of the invalid value, e.g. body.email'),
+				message: z.string().describe('What is wrong with the value'),
+			}),
+		)
+		.optional()
+		.describe('Per-field validation errors'),
 })
 
 /**

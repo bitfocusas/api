@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Security updates only: a limit of 0 disables routine version-update PRs,
+  # while security update PRs still use this entry's settings.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
+
+  # Keep all GitHub Actions up to date, in a single grouped PR
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    commit-message:
+      prefix: ci

@@ -155,7 +155,7 @@ describe('Custom Auth Example E2E', () => {
 				}
 
 				const body = request.body as { content?: string }
-				if (!body || !body.content) {
+				if (!body?.content) {
 					return reply.code(400).send({
 						statusCode: 400,
 						error: 'Bad Request',

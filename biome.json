@@ -1,8 +1,8 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.5/schema.json",
 	"files": {
 		"maxSize": 2048576,
-		"includes": ["**", "!**/node_modules", "!**/dist", "!**/coverage"]
+		"includes": ["**", "!**/node_modules", "!**/dist", "!**/coverage", "!**/*.md", "!**/*.yml"]
 	},
 	"assist": {
 		"actions": {
@@ -13,7 +13,7 @@
 	},
 	"linter": {
 		"rules": {
-			"recommended": true,
+			"preset": "recommended",
 			"a11y": {
 				"useAltText": "off",
 				"useKeyWithClickEvents": "off",
@@ -51,7 +51,8 @@
 				"noConfusingVoidType": "off",
 				"useIterableCallbackReturn": "off",
 				"noUnknownAtRules": "off",
-				"noTsIgnore": "off"
+				"noTsIgnore": "off",
+				"noShadow": "warn"
 			},
 			"performance": {
 				"noDelete": "off"
@@ -73,9 +74,7 @@
 				"noNestedComponentDefinitions": "warn",
 				"useParseIntRadix": "off"
 			},
-			"nursery": {
-				"noShadow": "warn"
-			}
+			"nursery": {}
 		}
 	},
 	"formatter": {

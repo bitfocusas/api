@@ -1,16 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { config as dotenvConfig } from 'dotenv'
 import { z } from '../../src/index'
 import { REMOTE_IP, useTestServers } from '../helpers'
-
-vi.mock('dotenv', () => ({ config: vi.fn() }))
 
 describe('Configuration', () => {
 	const createServer = useTestServers()
 
 	afterEach(() => {
 		vi.unstubAllEnvs()
-		vi.mocked(dotenvConfig).mockClear()
 	})
 
 	describe('defaults', () => {
@@ -135,18 +131,6 @@ describe('Configuration', () => {
 			const server = createServer({ metricsEnabled: undefined })
 
 			expect((await server.instance.inject({ url: '/metrics' })).statusCode).toBe(404)
-		})
-	})
-
-	describe('dotenv', () => {
-		it('should load .env by default', () => {
-			createServer({ loadEnv: undefined })
-			expect(dotenvConfig).toHaveBeenCalledTimes(1)
-		})
-
-		it('should not load .env when loadEnv is false', () => {
-			createServer({ loadEnv: false })
-			expect(dotenvConfig).not.toHaveBeenCalled()
 		})
 	})
 

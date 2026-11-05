@@ -7,7 +7,7 @@ describe('Prometheus metrics', () => {
 	let server: APIServer
 
 	beforeAll(async () => {
-		server = new APIServer({ loadEnv: false, metricsEnabled: true })
+		server = new APIServer({ metricsEnabled: true })
 		server.createEndpoint({
 			method: 'GET',
 			url: '/items/:id',

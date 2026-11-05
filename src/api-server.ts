@@ -7,7 +7,6 @@ import metricsPlugin from 'fastify-metrics'
 import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { createStandardResponses, ValidationError, ResponseValidationError, NotFoundError } from './validate'
-import { config as dotenvConfig } from 'dotenv'
 
 /**
  * Helper function to apply strict validation to a Zod schema
@@ -99,8 +98,6 @@ export interface APIServerConfig<TAuthContext = unknown> {
 	apiVersion?: string
 	/** Tags for Swagger docs grouping */
 	apiTags?: Array<{ name: string; description: string }>
-	/** Load environment variables from .env file (default: true) */
-	loadEnv?: boolean
 }
 
 /**
@@ -205,11 +202,6 @@ export class APIServer<TAuthContext = undefined> {
 	private ownsFastifyInstance = false
 
 	constructor(config: APIServerConfig<TAuthContext> = {}) {
-		// Load environment variables if requested
-		if (config.loadEnv !== false) {
-			dotenvConfig()
-		}
-
 		// Check if user provided their own Fastify instance
 		if (config.fastify) {
 			// Use provided Fastify instance
@@ -284,7 +276,6 @@ export class APIServer<TAuthContext = undefined> {
 			apiDescription: config.apiDescription ?? 'API built with Fastify, Zod, and TypeScript',
 			apiVersion: config.apiVersion ?? '1.0.0',
 			apiTags: config.apiTags ?? [],
-			loadEnv: config.loadEnv ?? true,
 		}
 
 		// Register plugins at root level - these must be registered before any routes

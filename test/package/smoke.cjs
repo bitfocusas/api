@@ -17,7 +17,7 @@ async function main() {
 	}
 
 	const { APIServer, z } = lib
-	const server = new APIServer({ loadEnv: false, logLevel: 'error', metricsEnabled: true, apiToken: 'secret' })
+	const server = new APIServer({ logLevel: 'error', metricsEnabled: true, apiToken: 'secret' })
 	server.createEndpoint({
 		method: 'POST',
 		url: '/echo/:id',

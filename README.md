@@ -18,6 +18,8 @@ Built on [Fastify](https://www.fastify.io/) (fast) and [Zod](https://zod.dev/) (
 npm install @bitfocusas/api
 ```
 
+Requires Node.js 24 or later.
+
 ## Quick Start
 
 ```typescript
@@ -224,6 +226,8 @@ RATE_LIMIT_WINDOW=15m
 METRICS_ENABLED=true
 CORS_ORIGIN=*
 ```
+
+These are read from `process.env`; the library does not load `.env` files itself. To use one, run with Node's built-in loader (`node --env-file=.env app.js`) or load it yourself before creating the server.
 
 ### `app.createEndpoint(config)`
 

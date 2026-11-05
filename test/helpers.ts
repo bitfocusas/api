@@ -27,7 +27,6 @@ export function useTestServers() {
 	): APIServer<TAuthContext> {
 		const server = new APIServer<TAuthContext>({
 			metricsEnabled: false,
-			loadEnv: false,
 			...config,
 		})
 		servers.push(server)

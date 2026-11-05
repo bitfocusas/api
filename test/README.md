@@ -14,7 +14,7 @@ test/
 │   ├── auth.test.ts            # Static token, custom validators, authenticateToken hook
 │   ├── rate-limit.test.ts      # Global/per-endpoint limits, allow list, trustProxy
 │   ├── openapi.test.ts         # Generated OpenAPI document and Swagger UI
-│   ├── config.test.ts          # Defaults, env vars, dotenv, CORS, logger, trustProxy
+│   ├── config.test.ts          # Defaults, env vars, CORS, logger, trustProxy
 │   ├── lifecycle.test.ts       # start/stop, custom Fastify instance, graceful shutdown
 │   ├── metrics.test.ts         # Prometheus /metrics (one metrics server per file)
 │   └── exports.test.ts         # Public runtime exports
@@ -42,7 +42,7 @@ yarn lint            # biome
 yarn build && yarn test:dist   # smoke test the compiled package
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above on Node 22, 24 and 26, on every push/PR and
+CI (`.github/workflows/ci.yml`) runs all of the above on Node 24 and 26, on every push/PR and
 weekly (no lockfile is committed, so the weekly run picks up newly published dependency versions).
 
 ## Notes

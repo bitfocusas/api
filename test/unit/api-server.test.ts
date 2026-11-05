@@ -673,7 +673,7 @@ describe('APIServer', () => {
 
 			// Verify CORS is registered (plugins are registered)
 			// We can't easily test metrics without registry conflicts, so we just verify plugins were registered
-			const response = await supertest(customFastify.server).get('/test').expect(404) // Endpoint doesn't exist, but CORS headers should be present
+			await supertest(customFastify.server).get('/test').expect(404) // Endpoint doesn't exist, but CORS headers should be present
 
 			await customFastify.close()
 		})

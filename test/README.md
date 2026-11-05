@@ -6,80 +6,50 @@ This directory contains comprehensive tests for the library. These tests are for
 
 ```
 test/
-├── unit/           # Unit tests for individual components
-│   ├── validate.test.ts      # Tests for validation utilities
-│   └── api-server.test.ts    # Tests for APIServer class
-└── e2e/            # End-to-end tests based on examples
-    ├── simple.example.test.ts       # Tests for simple example
-    ├── basic.example.test.ts        # Tests for basic example
-    └── custom-auth.example.test.ts  # Tests for custom auth example
+├── helpers.ts                  # useTestServers() + auth helpers shared by unit tests
+├── unit/
+│   ├── validate.test.ts        # Error classes and schema helpers
+│   ├── api-server.test.ts      # General APIServer behaviour (real listening servers)
+│   ├── request-handling.test.ts# Params/query/body parsing, response validation, error mapping
+│   ├── auth.test.ts            # Static token, custom validators, authenticateToken hook
+│   ├── rate-limit.test.ts      # Global/per-endpoint limits, allow list, trustProxy
+│   ├── openapi.test.ts         # Generated OpenAPI document and Swagger UI
+│   ├── config.test.ts          # Defaults, env vars, dotenv, CORS, logger, trustProxy
+│   ├── lifecycle.test.ts       # start/stop, custom Fastify instance, graceful shutdown
+│   ├── metrics.test.ts         # Prometheus /metrics (one metrics server per file)
+│   └── exports.test.ts         # Public runtime exports
+├── types/
+│   └── endpoint.test-d.ts      # Type inference tests (run by vitest typecheck)
+├── e2e/                        # Tests mirroring the examples/ scripts
+└── package/
+    └── smoke.cjs               # Requires the built dist/ via CommonJS (run after build)
 ```
 
-## Test Results
-
-**Current Status: ✅ 100% Pass Rate**
-
-```
-Test Files: 5 passed (5)
-Tests:      65 passed (65)
-```
-
-### Coverage Breakdown
-
-- **Unit Tests**: 38 tests
-  - validate.ts: 14 tests
-  - api-server.ts: 24 tests
-  
-- **E2E Tests**: 27 tests
-  - simple example: 3 tests
-  - basic example: 10 tests
-  - custom-auth example: 14 tests
+These tests pin the library's current observable behaviour (status codes, error bodies, headers,
+OpenAPI output) so that dependency updates which change it are caught. Two known issues are
+recorded as `it.fails` in `request-handling.test.ts`; flip them to `it` once fixed.
 
 ## Running Tests
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run with UI
-npm run test:ui
-
-# Run with coverage
-npm run test:coverage
-
-# Run only unit tests
-npm run test:unit
-
-# Run only e2e tests
-npm run test:e2e
+yarn test            # all vitest tests, including type tests
+yarn test:coverage   # with coverage (thresholds enforced)
+yarn test:unit       # unit tests only
+yarn test:e2e        # e2e tests only
+yarn test:types      # type tests only
+yarn typecheck       # tsc over src, tests and examples
+yarn lint            # biome
+yarn build && yarn test:dist   # smoke test the compiled package
 ```
 
-## What's Tested
+CI (`.github/workflows/ci.yml`) runs all of the above on Node 22, 24 and 26, on every push/PR and
+weekly (no lockfile is committed, so the weekly run picks up newly published dependency versions).
 
-### Unit Tests
-- Validation utilities and error classes
-- APIServer configuration and lifecycle
-- Endpoint creation and routing
-- Request/response validation
-- Authentication (simple & custom validators)
-- Error handling
-- Swagger documentation
-- Prometheus metrics
+## Notes
 
-### End-to-End Tests
-- All example scripts (`examples/simple.ts`, `examples/basic.ts`, `examples/custom-auth.ts`)
-- Ensures examples remain functional and demonstrate correct usage
-
-## Test Configuration
-
-Tests use Vitest with the following configuration:
-- **Environment**: Node.js
-- **Timeout**: 10 seconds per test
-- **Coverage**: v8 provider with text, JSON, and HTML reporters
-- **Metrics**: Disabled in tests to avoid Prometheus registry collisions
+- Prefer `server.instance.inject()` over binding ports; `useTestServers()` closes servers after each test.
+- Use `remoteAddress` other than `127.0.0.1` (e.g. `REMOTE_IP`) when testing rate limiting, as localhost is always allowed.
+- fastify-metrics uses prom-client's global registry, so only one `metricsEnabled` server can exist per test file.
 
 ## Writing Tests
 
@@ -131,12 +101,3 @@ describe('My Feature', () => {
   });
 });
 ```
-
-## Continuous Integration
-
-Tests are designed to run in CI environments:
-- No external dependencies required
-- All tests use ephemeral in-memory state
-- Sequential execution prevents port conflicts
-- Fast execution (< 2 seconds for full suite)
-

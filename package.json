@@ -15,7 +15,7 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
 		"prepublishOnly": "npm run build",
 		"example:simple": "tsx examples/simple.ts",
 		"example:basic": "tsx examples/basic.ts",
@@ -27,6 +27,9 @@
 		"test:coverage": "vitest run --coverage",
 		"test:unit": "vitest run test/unit",
 		"test:e2e": "vitest run test/e2e",
+		"test:types": "vitest run test/types",
+		"test:dist": "node test/package/smoke.cjs",
+		"lint": "biome check",
 		"release": "release-it",
 		"prepare": "husky"
 	},
@@ -61,6 +64,7 @@
 		"@release-it/conventional-changelog": "^10.0.2",
 		"@types/node": "^24.10.1",
 		"@types/supertest": "^6.0.3",
+		"@vitest/coverage-v8": "^5.1.0",
 		"@vitest/ui": "^4.0.13",
 		"husky": "^9.1.7",
 		"pino-pretty": "^13.1.2",
@@ -68,11 +72,12 @@
 		"supertest": "^7.1.4",
 		"tsx": "^4.20.6",
 		"typescript": "^5.9.3",
-		"vitest": "^4.0.13",
+		"vite": "^8.3.6",
+		"vitest": "^5.1.0",
 		"zod": "^4.1.12"
 	},
 	"engines": {
-		"node": ">=18.0.0"
+		"node": ">=22.0.0"
 	},
 	"files": [
 		"dist",

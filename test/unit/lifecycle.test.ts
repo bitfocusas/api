@@ -13,8 +13,8 @@ describe('Server lifecycle', () => {
 
 	describe('managed instance', () => {
 		it('should listen on the configured host and port and serve requests', async () => {
-			const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 			const server = createServer({ port: 0, host: '127.0.0.1' })
+			const logSpy = vi.spyOn(server.instance.log, 'info')
 			server.createEndpoint({
 				method: 'GET',
 				url: '/ping',
@@ -29,22 +29,27 @@ describe('Server lifecycle', () => {
 			const res = await fetch(`http://127.0.0.1:${address.port}/ping`)
 			expect(res.status).toBe(200)
 			expect(await res.json()).toEqual({ pong: true })
-			expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Server is running'))
+			expect(logSpy).toHaveBeenCalledWith(
+				{
+					docs: `http://127.0.0.1:${address.port}/docs`,
+					rateLimit: '100 requests per 15m',
+				},
+				'API server is running',
+			)
 		})
 
 		it('should mention metrics in the startup message only when enabled', async () => {
-			const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 			const server = createServer({ port: 0, rateLimitMax: 42, rateLimitWindow: '2m' })
+			const logSpy = vi.spyOn(server.instance.log, 'info')
 
 			await server.start()
 
-			const message = logSpy.mock.calls.flat().join('\n')
-			expect(message).not.toContain('Metrics')
-			expect(message).toContain('42 requests per 2m')
+			const [details] = logSpy.mock.calls.find(([, message]) => message === 'API server is running') ?? []
+			expect(details).not.toHaveProperty('metrics')
+			expect(details).toMatchObject({ rateLimit: '42 requests per 2m' })
 		})
 
 		it('should reject starting twice', async () => {
-			vi.spyOn(console, 'log').mockImplementation(() => {})
 			const server = createServer({ port: 0 })
 
 			await server.start()
@@ -53,20 +58,18 @@ describe('Server lifecycle', () => {
 		})
 
 		it('should reject and log when the port is in use', async () => {
-			vi.spyOn(console, 'log').mockImplementation(() => {})
-			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 			const first = createServer({ port: 0 })
 			await first.start()
 			const { port } = first.instance.server.address() as AddressInfo
 
 			const second = createServer({ port })
+			const errorSpy = vi.spyOn(second.instance.log, 'error')
 
 			await expect(second.start()).rejects.toMatchObject({ code: 'EADDRINUSE' })
-			expect(errorSpy).toHaveBeenCalledWith('Failed to start server:', expect.anything())
+			expect(errorSpy).toHaveBeenCalledWith({ err: expect.any(Error) }, 'Failed to start server')
 		})
 
 		it('should close the instance on stop and allow stopping twice', async () => {
-			vi.spyOn(console, 'log').mockImplementation(() => {})
 			const server = createServer({ port: 0 })
 			await server.start()
 			expect(server.instance.server.listening).toBe(true)
@@ -89,15 +92,15 @@ describe('Server lifecycle', () => {
 
 	describe('user-provided Fastify instance', () => {
 		it('should not listen or close the provided instance', async () => {
-			const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 			const app = fastify({ logger: false })
+			const logSpy = vi.spyOn(app.log, 'info')
 			const listenSpy = vi.spyOn(app, 'listen')
 			const closeSpy = vi.spyOn(app, 'close')
 			const server = createServer({ fastify: app })
 
 			await server.start()
 			expect(listenSpy).not.toHaveBeenCalled()
-			expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('attached to your Fastify instance'))
+			expect(logSpy).toHaveBeenCalledWith(expect.any(Object), 'API server attached to Fastify instance')
 			await expect(server.start()).rejects.toThrow('Server is already started')
 
 			await server.stop()
@@ -139,7 +142,6 @@ describe('Server lifecycle', () => {
 
 	describe('setupGracefulShutdown', () => {
 		it('should register SIGINT and SIGTERM handlers that stop the server and exit', async () => {
-			vi.spyOn(console, 'log').mockImplementation(() => {})
 			const handlers = new Map<string, () => Promise<void>>()
 			vi.spyOn(process, 'on').mockImplementation(((event: string, handler: () => Promise<void>) => {
 				handlers.set(event, handler)

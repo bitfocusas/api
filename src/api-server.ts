@@ -36,11 +36,11 @@ function applyStrict<T extends z.ZodTypeAny>(schema: T): T {
 
 /**
  * Generate operationId from URL path and HTTP method
- * Converts /thing/get_v1 with GET method to thing_get_v1
+ * Converts /thing/get_v1 with GET method to thing_get_v1_get, and /users/:id with DELETE to users_id_delete
  */
 function generateOperationId(url: string, method: string): string {
 	const cleanUrl = url.replace(/^\//, '').toLowerCase()
-	const pathPart = cleanUrl.replace(/\//g, '_')
+	const pathPart = cleanUrl.replace(/:/g, '').replace(/\//g, '_')
 	const methodPart = method.toLowerCase()
 	return `${pathPart}_${methodPart}`
 }
@@ -677,34 +677,33 @@ export class APIServer<TAuthContext = undefined> {
 		// If user provided their own Fastify instance, don't start it
 		if (!this.ownsFastifyInstance) {
 			this.started = true
-			console.log(`
-✅ API server attached to your Fastify instance!
-📝 API Documentation: http://localhost:${this.config.port}/docs
-${this.config.metricsEnabled ? `📊 Metrics: http://localhost:${this.config.port}/metrics` : ''}
-🔒 Rate Limit: ${this.config.rateLimitMax} requests per ${this.config.rateLimitWindow}
-      `)
+			this.logReady('API server attached to Fastify instance', `http://localhost:${this.config.port}`)
 			return
 		}
 
 		try {
-			// Start server (we own the instance)
 			await this.fastify.listen({
 				port: this.config.port,
 				host: this.config.host,
 			})
-
-			this.started = true
-
-			console.log(`
-🚀 Server is running!
-📝 API Documentation: http://localhost:${this.config.port}/docs
-${this.config.metricsEnabled ? `📊 Metrics: http://localhost:${this.config.port}/metrics` : ''}
-🔒 Rate Limit: ${this.config.rateLimitMax} requests per ${this.config.rateLimitWindow}
-      `)
 		} catch (err) {
-			console.error('Failed to start server:', err)
+			this.fastify.log.error({ err }, 'Failed to start server')
 			throw err
 		}
+
+		this.started = true
+		this.logReady('API server is running', this.fastify.listeningOrigin)
+	}
+
+	private logReady(message: string, origin: string): void {
+		this.fastify.log.info(
+			{
+				docs: `${origin}/docs`,
+				...(this.config.metricsEnabled ? { metrics: `${origin}/metrics` } : {}),
+				rateLimit: `${this.config.rateLimitMax} requests per ${this.config.rateLimitWindow}`,
+			},
+			message,
+		)
 	}
 
 	/**
@@ -737,7 +736,7 @@ ${this.config.metricsEnabled ? `📊 Metrics: http://localhost:${this.config.por
 		const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM']
 		signals.forEach((signal) => {
 			process.on(signal, async () => {
-				console.log(`\n${signal} received, closing server...`)
+				this.fastify.log.info(`${signal} received, closing server`)
 				await this.stop()
 				process.exit(0)
 			})

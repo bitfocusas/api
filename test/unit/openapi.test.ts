@@ -87,8 +87,7 @@ describe('OpenAPI / Swagger', () => {
 
 			expect(spec.paths['/thing/get_v1'].get.operationId).toBe('thing_get_v1_get')
 			expect(spec.paths['/Users/Create'].post.operationId).toBe('users_create_post')
-			// Path params are kept verbatim in the generated id
-			expect(spec.paths['/users/{id}'].delete.operationId).toBe('users_:id_delete')
+			expect(spec.paths['/users/{id}'].delete.operationId).toBe('users_id_delete')
 		})
 
 		it('should allow overriding operationId and set route metadata', async () => {

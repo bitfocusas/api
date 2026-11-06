@@ -139,12 +139,28 @@ describe('Request handling', () => {
 			expect(res.json()).toEqual({ tag: ['a', 'b'] })
 		})
 
-		it('should reject unknown query keys when a query schema is defined', async () => {
+		it('should strip unknown query keys when a query schema is defined', async () => {
 			const server = createServer()
 			server.createEndpoint({
 				method: 'GET',
 				url: '/search',
 				query: z.object({ q: z.string().optional() }),
+				response: z.object({ query: z.record(z.string(), z.string()) }),
+				handler: async (request) => ({ query: request.query as Record<string, string> }),
+			})
+
+			const res = await server.instance.inject({ url: '/search?q=a&utm=1' })
+
+			expect(res.statusCode).toBe(200)
+			expect(res.json()).toEqual({ query: { q: 'a' } })
+		})
+
+		it('should still reject unknown query keys when the query schema is explicitly strict', async () => {
+			const server = createServer()
+			server.createEndpoint({
+				method: 'GET',
+				url: '/search',
+				query: z.object({ q: z.string().optional() }).strict(),
 				response: z.object({}),
 				handler: async () => ({}),
 			})
@@ -155,17 +171,17 @@ describe('Request handling', () => {
 			expect(res.json().details).toEqual([{ field: 'query', message: 'Unrecognized key: "unknown"' }])
 		})
 
-		it('should reject any query keys when no query schema is defined', async () => {
+		it('should ignore query keys when no query schema is defined', async () => {
 			const server = createServer()
 			server.createEndpoint({
-				method: 'GET',
+				method: 'POST',
 				url: '/plain',
 				response: z.object({}),
 				handler: async () => ({}),
 			})
 
-			expect((await server.instance.inject({ url: '/plain' })).statusCode).toBe(200)
-			expect((await server.instance.inject({ url: '/plain?x=1' })).statusCode).toBe(400)
+			expect((await server.instance.inject({ method: 'POST', url: '/plain' })).statusCode).toBe(200)
+			expect((await server.instance.inject({ method: 'POST', url: '/plain?utm=1' })).statusCode).toBe(200)
 		})
 	})
 

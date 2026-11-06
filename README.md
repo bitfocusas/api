@@ -551,6 +551,8 @@ Invalid requests (query, body or path parameters that don't match their schema) 
 
 `field` is prefixed with `query`, `body` or `params`. Other errors are passed to the Fastify instance's error handler.
 
+Unknown keys in the request body, path parameters and response are rejected. Unknown query parameters are stripped instead, so that query strings added by proxies or link trackers don't cause 400s; use `.strict()` on a query schema to reject them.
+
 ### `ValidationError`
 
 Throw custom validation errors (returns 400):

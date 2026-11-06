@@ -545,8 +545,10 @@ export class APIServer<TAuthContext = undefined> {
 		this.fastify.after(() => {
 			// Provide empty params schema if no params are defined to avoid Fastify warnings
 			const paramsSchema = endpointConfig.params ? applyStrict(endpointConfig.params) : z.object({}).strict()
-			// Provide empty querystring schema if no query is defined to avoid Fastify warnings
-			const querystringSchema = endpointConfig.query ? applyStrict(endpointConfig.query) : z.object({}).strict()
+			// Provide empty querystring schema if no query is defined to avoid Fastify warnings.
+			// Unlike body and params, unknown query keys are stripped rather than rejected, so that
+			// query strings added by proxies, CDNs or link trackers don't break every route
+			const querystringSchema = endpointConfig.query ?? z.object({})
 
 			// Build rate limit config for this route
 			let rateLimitConfig: { rateLimit: false | { max: number; timeWindow?: string } } | undefined

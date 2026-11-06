@@ -9,6 +9,7 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
+# Read-only token; no job needs to write to the repo
 permissions:
   contents: read
 

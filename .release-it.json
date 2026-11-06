@@ -6,15 +6,14 @@
 		"requireBranch": "main"
 	},
 	"npm": {
-		"publish": true
+		"publish": false
 	},
 	"github": {
 		"release": true,
 		"releaseName": "v${version}"
 	},
 	"hooks": {
-		"before:init": ["npm run typecheck", "npm test"],
-		"after:bump": "npm run build"
+		"before:init": ["npm run typecheck", "npm test"]
 	},
 	"plugins": {
 		"@release-it/conventional-changelog": {

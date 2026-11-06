@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.1](https://github.com/bitfocusas/api/compare/v2.0.0...v2.0.1) (2026-11-06)
+
+### Bug Fixes
+
+* strip unknown query parameters instead of rejecting them ([b522589](https://github.com/bitfocusas/api/commit/b5225894b5184de0363f52b0574cbcd679316ec6))
+
 # [2.0.0](https://github.com/bitfocusas/api/compare/v1.2.2...v2.0.0) (2026-11-06)
 
 * feat!: ship as ESM only ([4beafda](https://github.com/bitfocusas/api/commit/4beafdaa1c4cf7923931881c746d23fee704c6bd))
